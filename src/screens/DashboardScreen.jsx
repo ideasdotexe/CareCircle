@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, TextInput, Platform, Animated,
+  ActivityIndicator, Modal, TextInput, Platform, Animated, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -541,42 +541,66 @@ export default function DashboardScreen({ navigation }) {
     // Supabase write
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const today = todayDateStr();
+      const hasTime = logTarget.time != null && logTarget.time !== '';
+      // Only include columns that are confirmed to exist in medication_logs
       const payload = {
         person_id: active.id,
         medication_name: logTarget.name,
-        dose: logTarget.dose ?? null,
-        scheduled_time: logTarget.time ?? null,
-        log_date: todayDateStr(),
-        logged_at: loggedAt,
+        scheduled_time: hasTime ? logTarget.time : null,
+        log_date: today,
         status,
         note: note || null,
       };
-      if (user?.id) payload.user_id = user.id;
 
-      // Try medication_logs table
-      const { error } = await supabase.from('medication_logs').upsert(payload, {
-        onConflict: 'person_id,medication_name,scheduled_time,log_date',
-        ignoreDuplicates: false,
-      });
-      if (error) {
-        // Retry insert (no upsert support or missing conflict key)
-        await supabase.from('medication_logs').insert(payload);
+      // Find existing log — must use .is() for NULL scheduled_time (not .eq())
+      let checkQuery = supabase
+        .from('medication_logs')
+        .select('id')
+        .eq('person_id', active.id)
+        .eq('medication_name', logTarget.name)
+        .eq('log_date', today);
+      checkQuery = hasTime
+        ? checkQuery.eq('scheduled_time', logTarget.time)
+        : checkQuery.is('scheduled_time', null);
+      const { data: existing, error: checkErr } = await checkQuery.maybeSingle();
+
+      let writeError;
+      if (existing?.id) {
+        const { error } = await supabase
+          .from('medication_logs')
+          .update({ status, note: note || null })
+          .eq('id', existing.id);
+        writeError = error;
+      } else {
+        const { error } = await supabase.from('medication_logs').insert(payload);
+        writeError = error;
       }
 
-      // Also log to activity_log
+      if (writeError) {
+        console.error('medication_logs write failed:', writeError.message);
+        // Revert optimistic update so user knows it didn't save
+        setLogMap(prev => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        Alert.alert('Could not save', 'The log could not be saved. Please try again.');
+        return;
+      }
+
+      // Log to activity_log (best-effort)
       try {
         await supabase.from('activity_log').insert({
           person_id: active.id,
           user_id: user?.id,
           activity_type: 'medication',
-          title: status === 'taken'
-            ? `${logTarget.name} taken`
-            : `${logTarget.name} skipped`,
+          title: status === 'taken' ? `${logTarget.name} taken` : `${logTarget.name} skipped`,
           note: note || null,
         });
       } catch (_) {}
-    } catch (_) {
-      // Keep optimistic state even on error
+    } catch (e) {
+      console.error('handleLog error:', e);
     }
   };
 

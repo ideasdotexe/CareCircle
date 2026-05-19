@@ -6,7 +6,7 @@ import { IconHome, IconPeople, IconUser } from './Icons';
 const TABS = [
   { label: 'Today', screen: 'CaregiverToday', icon: IconHome },
   { label: 'People', screen: 'CaregiverPeople', icon: IconPeople },
-  { label: 'Profile', screen: 'CaregiverProfile', icon: IconUser },
+  { label: 'You', screen: 'CaregiverProfile', icon: IconUser },
 ];
 
 export default function CaregiverTabBar({ active, navigation }) {

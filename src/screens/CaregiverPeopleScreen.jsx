@@ -22,10 +22,16 @@ export default function CaregiverPeopleScreen({ navigation }) {
       setProfile(p);
       const { data: rels } = await supabase
         .from('caregiver_relationships')
-        .select('*, person:person_id(*)')
+        .select('id, person_id, status')
         .eq('caregiver_id', user.id)
         .neq('status', 'revoked');
-      setPersons((rels || []).map(r => r.person).filter(Boolean));
+      const personIds = (rels || []).map(r => r.person_id).filter(Boolean);
+      if (personIds.length) {
+        const { data: ps } = await supabase.from('persons').select('*').in('id', personIds);
+        setPersons(ps || []);
+      } else {
+        setPersons([]);
+      }
     } catch (_) {}
     finally { setLoading(false); }
   }, []);

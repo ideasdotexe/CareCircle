@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 export default function CaregiverTodayScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [assigned, setAssigned] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -17,15 +18,43 @@ export default function CaregiverTodayScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      setProfile(p);
+      // Also try full_name from profiles
+      const displayName = p?.full_name || p?.first_name || 'there';
+      setProfile({ ...p, _displayName: displayName });
       try {
-        const { data } = await supabase
+        const { data: rels } = await supabase
           .from('caregiver_relationships')
-          .select('*, person:person_id(*), owner:owner_id(*)')
+          .select('id, caregiver_id, owner_id, person_id, status, role')
           .eq('caregiver_id', user.id)
           .neq('status', 'revoked');
-        setAssigned(data || []);
+
+        if (rels?.length) {
+          const personIds = [...new Set(rels.map(r => r.person_id).filter(Boolean))];
+          const ownerIds  = [...new Set(rels.map(r => r.owner_id).filter(Boolean))];
+          const [{ data: personsData }, { data: ownersData }] = await Promise.all([
+            personIds.length ? supabase.from('persons').select('*').in('id', personIds) : { data: [] },
+            ownerIds.length  ? supabase.from('profiles').select('id, full_name, first_name, last_name').in('id', ownerIds) : { data: [] },
+          ]);
+          const personMap = Object.fromEntries((personsData || []).map(p => [p.id, p]));
+          const ownerMap  = Object.fromEntries((ownersData  || []).map(o => [o.id, o]));
+          setAssigned(rels.map(r => ({
+            ...r,
+            person: personMap[r.person_id] || null,
+            owner:  ownerMap[r.owner_id]   || null,
+          })));
+        } else {
+          setAssigned([]);
+        }
       } catch (_) { setAssigned([]); }
+      // Pending requests badge
+      try {
+        const { count } = await supabase
+          .from('caregiver_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('caregiver_id', user.id)
+          .eq('status', 'pending');
+        setPendingCount(count || 0);
+      } catch (_) {}
     } catch (_) {}
     finally { setLoading(false); }
   }, []);
@@ -34,7 +63,7 @@ export default function CaregiverTodayScreen({ navigation }) {
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const name = profile?.first_name || 'there';
+  const name = profile?._displayName || 'there';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -48,8 +77,13 @@ export default function CaregiverTodayScreen({ navigation }) {
           <Text style={styles.greeting}>Today, {name}</Text>
           <Text style={styles.dateStr}>{dateStr}</Text>
         </View>
-        <TouchableOpacity style={styles.bellPill}>
+        <TouchableOpacity style={styles.bellPill} onPress={() => navigation.navigate('CaregiverNotifications')}>
           <IconBell />
+          {pendingCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{pendingCount > 9 ? '9+' : pendingCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -99,6 +133,8 @@ const styles = StyleSheet.create({
   greeting: { fontFamily: 'Georgia', fontSize: 26, lineHeight: 32, color: colors.forestDeep, fontWeight: '400', marginTop: 4 },
   dateStr: { marginTop: 2, fontSize: 12.5, color: colors.muted },
   bellPill: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.terracotta, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { fontSize: 9, color: '#fff', fontWeight: '700' },
   empty: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: colors.line, padding: 24, alignItems: 'center' },
   emptyTitle: { fontFamily: 'Georgia', fontSize: 16, color: colors.forestDeep, fontWeight: '500' },
   emptyText: { marginTop: 8, fontSize: 12.5, color: colors.muted, textAlign: 'center' },

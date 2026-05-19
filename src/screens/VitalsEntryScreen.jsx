@@ -419,12 +419,12 @@ const styles = StyleSheet.create({
   heroTitle: { marginTop: 4, fontFamily: 'Georgia', fontSize: 26, lineHeight: 30, letterSpacing: -0.6, color: colors.forestDeep, fontWeight: '400' },
 
   // Kind picker
-  kindScroll: { marginTop: 18 },
-  kindScrollContent: { paddingHorizontal: 20, gap: 8, paddingRight: 24 },
-  kindBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingLeft: 8, paddingVertical: 10, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line },
+  kindScroll: { marginTop: 12, height: 40, flexGrow: 0 },
+  kindScrollContent: { paddingHorizontal: 20, gap: 6, paddingRight: 24, alignItems: 'center' },
+  kindBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingLeft: 6, paddingVertical: 5, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, height: 32 },
   kindBtnActive: { backgroundColor: colors.forestDeep, borderColor: colors.forestDeep },
-  kindIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  kindLabel: { fontSize: 13, fontWeight: '600', color: colors.ink, letterSpacing: -0.1 },
+  kindIcon: { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  kindLabel: { fontSize: 11.5, fontWeight: '600', color: colors.ink, letterSpacing: -0.1 },
 
   // Body scroll
   body: { paddingHorizontal: 20, paddingTop: 22 },

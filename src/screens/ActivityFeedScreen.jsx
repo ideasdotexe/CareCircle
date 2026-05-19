@@ -385,7 +385,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
       </View>
 
       {/* ── Hero header ── */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 20 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 14 }}>
         <Text style={st.heroText}>The shared log{'\n'}of {displayName}'s care.</Text>
         <Text style={st.heroSub}>
           Every dose, vital, and note — grouped by day, with who logged it.
@@ -394,7 +394,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
 
       {/* ── Person chips ── */}
       {persons.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.personRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 0 }} contentContainerStyle={st.personRow}>
           {persons.map((p, i) => {
             const isActive = i === activeIdx;
             const tint = i % 2 === 0 ? '#3F5D54' : '#C66E4E';
@@ -426,6 +426,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ flexShrink: 0 }}
         contentContainerStyle={st.filterRow}
       >
         {FILTER_TABS.map(tab => {
@@ -456,7 +457,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           {grouped.length === 0 ? (
@@ -467,7 +468,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
             </View>
           ) : (
             grouped.map(group => (
-              <View key={group.label} style={{ paddingHorizontal: 20, marginBottom: 18 }}>
+              <View key={group.label} style={{ paddingHorizontal: 20, marginBottom: 10 }}>
                 <DaySummaryCard label={group.label} items={group.items} />
                 <View style={st.listCard}>
                   {group.items.map((it, i) => (
@@ -540,7 +541,7 @@ const st = StyleSheet.create({
   heroSub: { marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 18 },
 
   // Person chips
-  personRow: { paddingHorizontal: 20, paddingTop: 18, gap: 8, flexDirection: 'row' },
+  personRow: { paddingHorizontal: 20, paddingTop: 12, gap: 8, flexDirection: 'row' },
   personChip: {
     height: 40, paddingHorizontal: 14, paddingLeft: 4, borderRadius: 99,
     borderWidth: 1, borderColor: C.line, backgroundColor: '#fff',
@@ -553,7 +554,7 @@ const st = StyleSheet.create({
   personChipRel: { fontSize: 9.5, color: C.muted, marginTop: 1, letterSpacing: 0.2 },
 
   // Filter strip
-  filterRow: { paddingHorizontal: 20, paddingTop: 12, gap: 7, flexDirection: 'row' },
+  filterRow: { paddingHorizontal: 20, paddingTop: 8, gap: 7, flexDirection: 'row' },
   filterChip: {
     height: 32, paddingHorizontal: 12, paddingLeft: 6, borderRadius: 99,
     borderWidth: 1, borderColor: C.line, backgroundColor: '#fff',

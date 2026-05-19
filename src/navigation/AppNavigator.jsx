@@ -50,6 +50,7 @@ import CaregiverVisitScreen from '../screens/CaregiverVisitScreen';
 import CaregiverVisitNoteScreen from '../screens/CaregiverVisitNoteScreen';
 import CaregiverMedConfirmScreen from '../screens/CaregiverMedConfirmScreen';
 import CaregiverVitalsLogScreen from '../screens/CaregiverVitalsLogScreen';
+import CaregiverNotificationsScreen from '../screens/CaregiverNotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -116,6 +117,7 @@ function CaregiverStack({ initialRoute }) {
       <Stack.Screen name="CaregiverVisitNote" component={CaregiverVisitNoteScreen} />
       <Stack.Screen name="CaregiverMedConfirm" component={CaregiverMedConfirmScreen} />
       <Stack.Screen name="CaregiverVitalsLog" component={CaregiverVitalsLogScreen} />
+      <Stack.Screen name="CaregiverNotifications" component={CaregiverNotificationsScreen} />
       {/* shared details */}
       <Stack.Screen name="VitalsHistory" component={VitalsHistoryScreen} />
       <Stack.Screen name="VitalsEntry" component={VitalsEntryScreen} />

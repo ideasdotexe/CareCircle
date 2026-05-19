@@ -1,53 +1,80 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Alert, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { jsx as _jsx } from "react/jsx-runtime";
-const AuthContext = /*#__PURE__*/createContext({
+
+const AuthContext = createContext({
   session: null,
   user: null,
   loading: true,
-  signOut: async () => {}
+  signOut: async () => {},
 });
-export function AuthProvider({
-  children
-}) {
+
+async function ensureProfile(user) {
+  if (!user) return;
+  const fullName =
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    (user.email ? user.email.split('@')[0] : '');
+  await supabase.from('profiles').upsert(
+    { id: user.id, full_name: fullName || null, email: user.email || null },
+    { onConflict: 'id', ignoreDuplicates: false }
+  );
+}
+
+export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     let mounted = true;
-    // Restore existing session on launch
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        setSession(session);
-        setLoading(false);
-      }
-    });
-    const {
-      data: {
-        subscription
-      }
-    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-        setSession(session);
-        setLoading(false);
+      setSession(session);
+      setLoading(false);
+      if (session?.user) ensureProfile(session.user);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      setSession(session);
+      setLoading(false);
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+        ensureProfile(session.user);
       }
     });
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
   }, []);
-  const signOut = async () => {
-    await supabase.auth.signOut();
+
+  const signOut = () => {
+    const doSignOut = () => supabase.auth.signOut();
+
+    if (Platform.OS === 'web') {
+      // Alert.alert is a no-op on web — use native browser confirm
+      if (window.confirm('Are you sure you want to sign out?')) {
+        doSignOut();
+      }
+    } else {
+      Alert.alert(
+        'Sign out',
+        'Are you sure you want to sign out?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign out', style: 'destructive', onPress: doSignOut },
+        ]
+      );
+    }
   };
-  return /*#__PURE__*/_jsx(AuthContext.Provider, {
-    value: {
-      session,
-      user: session?.user ?? null,
-      loading,
-      signOut
-    },
-    children: children
-  });
+
+  return (
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
+
 export const useAuth = () => useContext(AuthContext);
