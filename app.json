@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "CareCircle",
+    "slug": "CareCircle",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "carecircle",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F6F1EA"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.CareCircle",
+      "usesAppleSignIn": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F6F1EA"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "carecircle" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "supabaseUrl": "https://hgdndgfsjflkwuhkobdu.supabase.co",
+      "supabaseAnonKey": "sb_publishable_LV_oyFhRmwN5ePaMNySJzQ_GSp1K108",
+      "groqApiKey": "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"
+    },
+    "plugins": [
+      "expo-apple-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CareCircle accesses your photos to upload prescriptions and lab reports.",
+          "cameraPermission": "CareCircle uses the camera to scan prescriptions and lab reports."
+        }
+      ]
+    ]
+  }
+}
