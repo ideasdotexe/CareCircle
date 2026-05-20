@@ -4,11 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { colors } from '../theme';
-import { IconPlus, IconArrow } from '../components/Icons';
+import { IconPlus } from '../components/Icons';
 import TabBar from '../components/TabBar';
 import { supabase } from '../lib/supabase';
-import { CAREGIVER_DIRECTORY, normalizeSupabaseCaregiver } from '../data/caregivers';
-import { PhotoTile, Stars, SearchResultCard } from './FindCaregiverScreen';
 
 const C = {
   cream: '#F6F1EA', ink: '#1A1F1D', forest: '#1F3D38', forestDeep: '#15302C',
@@ -24,7 +22,6 @@ function getInitials(name) {
 export default function CareScreen({ navigation }) {
   const [caregivers, setCaregivers] = useState([]);
   const [persons, setPersons] = useState([]);
-  const [nearbyExtra, setNearbyExtra] = useState([]);
   const [assignModal, setAssignModal] = useState(null); // { caregiver: rel }
   const [assignPersonId, setAssignPersonId] = useState('');
   const [assignAccess, setAssignAccess] = useState({ vitals: true, medications: true, documents: true });
@@ -58,14 +55,6 @@ export default function CareScreen({ navigation }) {
         const { data: ps } = await supabase.from('persons').select('id, first_name, last_name').eq('user_id', user.id);
         setPersons(ps || []);
       } catch (_) {}
-
-      // Extra real Supabase profiles (nearby)
-      try {
-        const mockIds = new Set(CAREGIVER_DIRECTORY.map(c => c.id));
-        const { data } = await supabase.from('caregiver_profiles').select('*').limit(10);
-        const extra = (data || []).map(normalizeSupabaseCaregiver).filter(c => !mockIds.has(c.id));
-        setNearbyExtra(extra);
-      } catch (_) { setNearbyExtra([]); }
     } catch (_) {}
   }, []);
 
@@ -82,7 +71,6 @@ export default function CareScreen({ navigation }) {
     setAssigning(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      // Only use confirmed columns — no access_* columns (don't exist yet)
       const { error: assignErr } = await supabase.from('caregiver_relationships').upsert({
         caregiver_id: assignModal.caregiver_id,
         owner_id: user.id,
@@ -100,9 +88,6 @@ export default function CareScreen({ navigation }) {
     } finally { setAssigning(false); }
   };
 
-  // Near you: first 3 from mock + any real extras
-  const nearbyProfiles = [...CAREGIVER_DIRECTORY.slice(0, 3), ...nearbyExtra.slice(0, 2)];
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
@@ -117,6 +102,7 @@ export default function CareScreen({ navigation }) {
           <Text style={styles.heroSub}>Find caregivers, invite family, manage who can do what.</Text>
         </View>
 
+        {/* ── Action buttons ── */}
         <View style={styles.btnRow}>
           <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => navigation.navigate('FindCaregiver')}>
             <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
@@ -125,8 +111,14 @@ export default function CareScreen({ navigation }) {
             </Svg>
             <Text style={styles.primaryBtnText}>Find caregiver</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.secondaryBtn, { flex: 1 }]} onPress={() => navigation.navigate('ManageCaregivers')}>
-            <Text style={styles.secondaryBtnText}>Manage team</Text>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { flex: 1 }]}
+            onPress={() => navigation.navigate('InviteCaregiver', { personId: persons[0]?.id })}
+          >
+            <Svg width={13} height={13} viewBox="0 0 13 13" fill="none">
+              <Path d="M6.5 1v11M1 6.5h11" stroke={C.forestDeep} strokeWidth={1.7} strokeLinecap="round" />
+            </Svg>
+            <Text style={styles.secondaryBtnText}>Invite</Text>
           </TouchableOpacity>
         </View>
 
@@ -216,22 +208,6 @@ export default function CareScreen({ navigation }) {
           </View>
         </Modal>
 
-        {/* ── Caregivers near you ── */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Caregivers near you</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('FindCaregiver')}>
-              <Text style={styles.sectionAction}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          {nearbyProfiles.map(c => (
-            <SearchResultCard
-              key={c.id}
-              c={c}
-              onPress={() => navigation.navigate('CaregiverPublicProfile', { caregiver: c })}
-            />
-          ))}
-        </View>
       </ScrollView>
 
       <TabBar active={2} navigation={navigation} />
@@ -248,7 +224,7 @@ const styles = StyleSheet.create({
   btnRow: { padding: 20, paddingTop: 18, flexDirection: 'row', gap: 8 },
   primaryBtn: { height: 52, borderRadius: 16, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   primaryBtnText: { color: '#fff', fontSize: 14.5, fontWeight: '500' },
-  secondaryBtn: { height: 52, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.forestDeep, alignItems: 'center', justifyContent: 'center' },
+  secondaryBtn: { height: 52, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.forestDeep, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
   secondaryBtnText: { color: C.forestDeep, fontSize: 14.5, fontWeight: '500' },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 },
   sectionTitle: { fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep, fontWeight: '500' },

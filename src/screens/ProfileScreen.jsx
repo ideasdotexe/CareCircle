@@ -85,8 +85,28 @@ export default function ProfileScreen({
   navigation,
   route
 }) {
-  const person = route?.params?.person;
-  const personId = person?.id;
+  // Support both { person } (full object) and { personId } (bare ID from PeopleScreen / DashboardScreen)
+  const routePerson = route?.params?.person;
+  const routePersonId = route?.params?.personId;
+
+  const [resolvedPerson, setResolvedPerson] = useState(routePerson ?? null);
+
+  // If we only got a personId, fetch the full person row once
+  useEffect(() => {
+    if (!routePerson && routePersonId) {
+      supabase
+        .from('persons')
+        .select('*')
+        .eq('id', routePersonId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setResolvedPerson(data);
+        });
+    }
+  }, [routePerson, routePersonId]);
+
+  const person = resolvedPerson;
+  const personId = person?.id ?? routePersonId;
   const name = person?.name ?? 'Unknown';
   const relationship = person?.relationship ?? '';
   const dob = person?.date_of_birth ?? null;

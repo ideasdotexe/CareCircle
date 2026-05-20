@@ -128,6 +128,7 @@ function ActivityRow({ item, isLast }) {
 
 export default function CaregiverNotificationsScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -159,6 +160,17 @@ export default function CaregiverNotificationsScreen({ navigation }) {
         setRequests([]);
       }
 
+      // In-app notifications from notifications table (best-effort)
+      try {
+        const { data: notifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        setNotifications(notifs || []);
+      } catch (_) { setNotifications([]); }
+
       // Recent activity for assigned persons
       const { data: rels } = await supabase
         .from('caregiver_relationships')
@@ -184,6 +196,13 @@ export default function CaregiverNotificationsScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const markNotifRead = async (id) => {
+    try {
+      await supabase.from('notifications').update({ read: true }).eq('id', id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (_) {}
+  };
+
   const confirmAction = (message, onConfirm) => {
     if (Platform.OS === 'web') {
       if (window.confirm(message)) onConfirm();
@@ -206,6 +225,26 @@ export default function CaregiverNotificationsScreen({ navigation }) {
         status: 'accepted',
         role: 'caregiver',
       });
+      // Notify owner that request was accepted (best-effort)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: cgProfile } = await supabase
+          .from('profiles')
+          .select('full_name, first_name, last_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        const cgName = cgProfile?.full_name
+          || `${cgProfile?.first_name || ''} ${cgProfile?.last_name || ''}`.trim()
+          || 'Your caregiver';
+        await supabase.from('notifications').insert({
+          user_id: req.owner_id,
+          type: 'request_accepted',
+          title: 'Care request accepted',
+          body: `${cgName} has accepted your care request.`,
+          data: { caregiver_id: user.id },
+          read: false,
+        });
+      } catch (_) {}
       setRequests(prev => prev.filter(r => r.id !== req.id));
     } catch (e) {
       Alert.alert('Error', e.message || 'Could not accept request.');
@@ -222,6 +261,8 @@ export default function CaregiverNotificationsScreen({ navigation }) {
       }
     });
   };
+
+  const unreadNotifs = notifications.filter(n => !n.read && n.type !== 'care_request'); // care_request shown as cards
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -249,6 +290,32 @@ export default function CaregiverNotificationsScreen({ navigation }) {
             </View>
           )}
 
+          {/* ── Other notifications ── */}
+          {unreadNotifs.length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <Text style={s.groupLabel}>Notifications</Text>
+              <View style={s.card}>
+                {unreadNotifs.map((n, i) => (
+                  <TouchableOpacity
+                    key={n.id}
+                    style={[s.notifRow, i < unreadNotifs.length - 1 && s.actRowBorder]}
+                    onPress={() => markNotifRead(n.id)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[s.actDot, { backgroundColor: n.read ? C.cream : '#DDE4D6' }]}>
+                      <Text style={{ fontSize: 14 }}>🔔</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.actTitle}>{n.title}</Text>
+                      {!!n.body && <Text style={s.actNote} numberOfLines={2}>{n.body}</Text>}
+                    </View>
+                    <Text style={s.actTime}>{timeAgo(n.created_at)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* ── Activity feed ── */}
           <Text style={s.groupLabel}>Recent activity</Text>
           {activity.length === 0 ? (
@@ -264,7 +331,7 @@ export default function CaregiverNotificationsScreen({ navigation }) {
             </View>
           )}
 
-          {requests.length === 0 && activity.length === 0 && (
+          {requests.length === 0 && activity.length === 0 && unreadNotifs.length === 0 && (
             <View style={s.emptyCard}>
               <Text style={s.emptyText}>All caught up</Text>
               <Text style={s.emptySub}>New care requests and activity updates will appear here.</Text>
@@ -299,6 +366,7 @@ const s = StyleSheet.create({
   acceptBtnText: { fontSize: 13, color: '#fff', fontWeight: '600' },
   // Activity
   card: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+  notifRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, paddingHorizontal: 16 },
   actRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, paddingHorizontal: 16 },
   actRowBorder: { borderBottomWidth: 1, borderBottomColor: C.lineSoft },
   actDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

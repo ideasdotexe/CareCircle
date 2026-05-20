@@ -125,37 +125,30 @@ export default function FindCaregiverScreen({ navigation }) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        // ── Source 1: caregiver_profiles table (dedicated caregiver listings) ──
+        const { data: cpRows } = await supabase
+          .from('caregiver_profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-        // Collect real caregiver user IDs from caregiver_relationships
-        const { data: rels } = await supabase
-          .from('caregiver_relationships')
-          .select('caregiver_id')
-          .neq('status', 'revoked');
-        const cgIds = [...new Set((rels || []).map(r => r.caregiver_id).filter(Boolean))];
+        const fromCpTable = (cpRows || []).map(normalizeSupabaseCaregiver);
 
-        // Also include the current user if they're in caregiver mode (self-registered)
-        const { data: { user: me } } = await supabase.auth.getUser();
-        const allIds = me ? [...new Set([...cgIds, me.id])] : cgIds;
-
-        if (allIds.length === 0) return;
-
+        // ── Source 2: profiles table where role = 'caregiver' ──
         const { data: profileRows } = await supabase
           .from('profiles')
           .select('id, full_name, first_name, last_name, role')
-          .in('id', allIds);
+          .eq('role', 'caregiver');
 
-        const caregiverProfiles = (profileRows || []).filter(p =>
-          // include if role is caregiver, OR if they appear in caregiver_relationships
-          p.role === 'caregiver' || cgIds.includes(p.id)
-        );
+        const cpIds = new Set(fromCpTable.map(c => c.id));
+        const fromProfiles = (profileRows || [])
+          .filter(p => !cpIds.has(p.id)) // avoid duplicates
+          .map(p => normalizeSupabaseCaregiver({
+            id: p.id,
+            full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || null,
+          }))
+          .filter(c => c.name && c.name !== 'Caregiver');
 
-        const normalized = caregiverProfiles.map(p => normalizeSupabaseCaregiver({
-          id: p.id,
-          full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || null,
-        })).filter(c => c.name && c.name !== 'Caregiver');
-
-        setSupabaseCaregivers(normalized);
+        setSupabaseCaregivers([...fromCpTable, ...fromProfiles]);
       } catch (_) {
         // silently ignore — mock data still shows
       }

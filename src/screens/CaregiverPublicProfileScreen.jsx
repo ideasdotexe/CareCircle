@@ -122,11 +122,39 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
     setSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('caregiver_requests').insert({
+
+      // Get sender's name for the notification
+      const { data: senderProfile } = await supabase
+        .from('profiles')
+        .select('full_name, first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      const senderName = senderProfile?.full_name
+        || `${senderProfile?.first_name || ''} ${senderProfile?.last_name || ''}`.trim()
+        || 'Someone';
+
+      // Insert care request
+      const { error: reqErr } = await supabase.from('caregiver_requests').insert({
         owner_id: user.id,
         caregiver_id: c.id,
         status: 'pending',
       });
+      if (reqErr) throw reqErr;
+
+      // Notify the caregiver (best-effort — table may not exist yet)
+      try {
+        await supabase.from('notifications').insert({
+          user_id: c.id,          // recipient = the caregiver
+          type: 'care_request',
+          title: 'New care request',
+          body: `${senderName} has sent you a care request.`,
+          data: { owner_id: user.id },
+          read: false,
+        });
+      } catch (_) {
+        // Notifications table may not exist — ignore silently
+      }
+
       setSent(true);
     } catch (e) {
       Alert.alert('Could not send', e.message || String(e));
