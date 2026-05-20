@@ -20,21 +20,19 @@ export default function OnboardingScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not signed in');
 
-      // Save profile (step 1)
+      // Save profile — profiles table uses full_name (no separate first/last columns)
       await supabase.from('profiles').upsert({
         id: user.id,
-        first_name: you.first,
-        last_name: you.last,
-        date_of_birth: you.dob || null,
-        address: you.address || null,
+        full_name: `${you.first} ${you.last}`.trim(),
+        email: user.email,
       });
 
       if (!skipPerson && them.first.trim()) {
         const addr = them.sameAddress ? you.address : them.address;
+        // persons table uses single `name` column
         await supabase.from('persons').insert({
           user_id: user.id,
-          first_name: them.first,
-          last_name: them.last,
+          name: `${them.first} ${them.last}`.trim(),
           date_of_birth: them.dob || null,
           relationship: them.rel,
           address: addr || null,

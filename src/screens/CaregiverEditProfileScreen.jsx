@@ -8,6 +8,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { PhotoTile } from './FindCaregiverScreen';
 import { fetchDisplayName } from '../lib/userProfile';
+import PlaceAutocomplete from '../components/PlaceAutocomplete';
 
 const C = {
   cream: '#F6F1EA', ink: '#1A1F1D', forest: '#1F3D38', forestDeep: '#15302C',
@@ -185,7 +186,6 @@ function SectionHead({ title }) {
 // ─── Main screen ──────────────────────────────────────────
 export default function CaregiverEditProfileScreen({ navigation }) {
   const [form, setForm] = useState({
-    title: '',
     years_experience: '',
     city: '',
     province: '',
@@ -219,7 +219,6 @@ export default function CaregiverEditProfileScreen({ navigation }) {
 
         if (cp) {
           setForm({
-            title: cp.title || '',
             years_experience: cp.years_experience ? String(cp.years_experience) : '',
             city: cp.city || '',
             province: cp.province || '',
@@ -241,10 +240,15 @@ export default function CaregiverEditProfileScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not logged in.');
 
-      // Build payload with only confirmed DB columns
+      // 1. Mark as caregiver and save name so Find Caregiver can show it
+      await supabase.from('profiles').upsert(
+        { id: user.id, role: 'caregiver', full_name: displayName || null, email: user.email },
+        { onConflict: 'id' }
+      );
+
+      // 2. Save caregiver-specific details
       const payload = {
         user_id: user.id,
-        title: form.title.trim() || null,
         years_experience: parseInt(form.years_experience, 10) || null,
         city: form.city.trim() || null,
         province: form.province.trim() || null,
@@ -320,12 +324,6 @@ export default function CaregiverEditProfileScreen({ navigation }) {
 
         {/* ── Professional info ── */}
         <SectionHead title="Professional info" />
-        <Field
-          label="Title"
-          value={form.title}
-          onChange={v => set('title', v)}
-          placeholder="e.g. Personal Support Worker"
-        />
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
             <Field
@@ -387,21 +385,31 @@ export default function CaregiverEditProfileScreen({ navigation }) {
 
         {/* ── Location ── */}
         <SectionHead title="Location" />
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="City"
+        <View style={{ marginBottom: 16, zIndex: 10 }}>
+          <Text style={st.fieldLabel}>CITY</Text>
+          <View style={{ marginTop: 6 }}>
+            <PlaceAutocomplete
+              type="city"
               value={form.city}
-              onChange={v => set('city', v)}
+              onChangeText={v => set('city', v)}
+              onSelect={item => {
+                set('city', item.city || item.label);
+                if (item.province) set('province', item.province);
+              }}
               placeholder="e.g. Toronto"
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Province"
+        </View>
+        <View style={{ marginBottom: 16 }}>
+          <Text style={st.fieldLabel}>PROVINCE</Text>
+          <View style={[st.input, { marginTop: 6 }]}>
+            <TextInput
               value={form.province}
-              onChange={v => set('province', v)}
+              onChangeText={v => set('province', v)}
               placeholder="e.g. ON"
+              placeholderTextColor="#9A968F"
+              style={{ flex: 1, fontSize: 15, color: '#1A1F1D' }}
+              autoCapitalize="characters"
             />
           </View>
         </View>

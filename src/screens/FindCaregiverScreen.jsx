@@ -87,7 +87,9 @@ export function SearchResultCard({ c, onPress }) {
           <Text style={sh.cardName}>{c.name}</Text>
           {c.verified && <VerifiedTag />}
         </View>
-        <Text style={sh.cardMeta}>{c.title}{c.yearsExp > 0 ? ` · ${c.yearsExp} yrs experience` : ''}</Text>
+        <Text style={sh.cardMeta}>
+          {c.yearsExp > 0 ? `${c.yearsExp} yrs experience` : 'Caregiver'}
+        </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
           <Svg width={11} height={13} viewBox="0 0 11 13" fill="none">
             <Path d="M5.5 1a4 4 0 014 4c0 3-4 7-4 7s-4-4-4-7a4 4 0 014-4z" stroke={C.mutedSoft} strokeWidth={1.3} />
@@ -124,33 +126,46 @@ export default function FindCaregiverScreen({ navigation }) {
 
   useEffect(() => {
     (async () => {
+      let fromProfiles = [];
+
       try {
-        // ── Source 1: caregiver_profiles table (dedicated caregiver listings) ──
+        // 1. caregiver_profiles is the source of truth for professional details
         const { data: cpRows } = await supabase
           .from('caregiver_profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .select('*');
 
-        const fromCpTable = (cpRows || []).map(normalizeSupabaseCaregiver);
+        if (!cpRows?.length) {
+          // Fallback: try profiles table directly
+          const { data: pRows } = await supabase
+            .from('profiles')
+            .select('id, full_name, role')
+            .eq('role', 'caregiver');
+          fromProfiles = (pRows || []).map(p =>
+            normalizeSupabaseCaregiver({ id: p.id, full_name: p.full_name })
+          );
+        } else {
+          // 2. Fetch names from profiles for those user_ids
+          const userIds = cpRows.map(r => r.user_id).filter(Boolean);
+          let nameMap = {};
+          try {
+            const { data: pRows } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', userIds);
+            (pRows || []).forEach(p => { nameMap[p.id] = p.full_name || ''; });
+          } catch (_) {}
 
-        // ── Source 2: profiles table where role = 'caregiver' ──
-        const { data: profileRows } = await supabase
-          .from('profiles')
-          .select('id, full_name, first_name, last_name, role')
-          .eq('role', 'caregiver');
+          // 3. Merge: attach name to each caregiver_profiles row
+          fromProfiles = cpRows.map(cp => normalizeSupabaseCaregiver({
+            ...cp,
+            id: cp.user_id,                          // use user_id as the card id
+            full_name: nameMap[cp.user_id] || '',    // name from profiles table
+          }));
+        }
+      } catch (_) {}
 
-        const cpIds = new Set(fromCpTable.map(c => c.id));
-        const fromProfiles = (profileRows || [])
-          .filter(p => !cpIds.has(p.id)) // avoid duplicates
-          .map(p => normalizeSupabaseCaregiver({
-            id: p.id,
-            full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || null,
-          }))
-          .filter(c => c.name && c.name !== 'Caregiver');
-
-        setSupabaseCaregivers([...fromCpTable, ...fromProfiles]);
-      } catch (_) {
-        // silently ignore — mock data still shows
+      if (fromProfiles.length) {
+        setSupabaseCaregivers(fromProfiles);
       }
     })();
   }, []);

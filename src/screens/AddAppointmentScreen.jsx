@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
+import PlaceAutocomplete from '../components/PlaceAutocomplete';
 
 // ─── Design tokens ────────────────────────────────────────
 const C = {
@@ -518,22 +519,29 @@ export default function AddAppointmentScreen({ navigation, route }) {
           />
         </View>
 
-        {/* Doctor / Provider */}
-        <View style={s.field}>
+        {/* Doctor / Provider — clinic name autocomplete */}
+        <View style={[s.field, { zIndex: 20 }]}>
           <FieldLabel label={PLACEHOLDERS.whoLabel[kind]} />
-          <FieldInput
+          <PlaceAutocomplete
+            type="clinic"
             value={who}
-            onChange={setWho}
+            onChangeText={setWho}
+            onSelect={item => {
+              setWho(item.name || item.label);
+              if (!where) setWhere(item.address || '');
+            }}
             placeholder={PLACEHOLDERS.who[kind]}
           />
         </View>
 
-        {/* Location */}
-        <View style={s.field}>
+        {/* Location — address autocomplete */}
+        <View style={[s.field, { zIndex: 10 }]}>
           <FieldLabel label="Location" optional={kind === 'tele'} />
-          <FieldInput
+          <PlaceAutocomplete
+            type="address"
             value={where}
-            onChange={setWhere}
+            onChangeText={setWhere}
+            onSelect={item => setWhere(item.label)}
             placeholder={PLACEHOLDERS.where[kind]}
             leading={kind === 'tele'
               ? <IconVideo color={C.muted} />

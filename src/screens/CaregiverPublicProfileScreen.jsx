@@ -126,12 +126,10 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
       // Get sender's name for the notification
       const { data: senderProfile } = await supabase
         .from('profiles')
-        .select('full_name, first_name, last_name')
+        .select('full_name')
         .eq('id', user.id)
         .maybeSingle();
-      const senderName = senderProfile?.full_name
-        || `${senderProfile?.first_name || ''} ${senderProfile?.last_name || ''}`.trim()
-        || 'Someone';
+      const senderName = senderProfile?.full_name || 'Someone';
 
       // Insert care request
       const { error: reqErr } = await supabase.from('caregiver_requests').insert({

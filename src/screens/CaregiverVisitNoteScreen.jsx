@@ -18,11 +18,11 @@ export default function CaregiverVisitNoteScreen({ navigation, route }) {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: prof } = await supabase.from('profiles').select('first_name, last_name').eq('id', user.id).maybeSingle();
+      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
       await supabase.from('visit_notes').insert({
         person_id: personId,
         author_id: user.id,
-        author_name: `${prof?.first_name || ''} ${prof?.last_name || ''}`.trim() || 'Caregiver',
+        author_name: prof?.full_name || 'Caregiver',
         note,
         when_label: when,
       });

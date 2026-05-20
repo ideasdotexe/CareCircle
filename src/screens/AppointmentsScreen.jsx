@@ -182,11 +182,11 @@ export default function AppointmentsScreen({ navigation, route }) {
     if (!personId) { setLoading(false); return; }
     try {
       const [personRes, apptRes] = await Promise.all([
-        supabase.from('persons').select('name, first_name').eq('id', personId).maybeSingle(),
+        supabase.from('persons').select('name').eq('id', personId).maybeSingle(),
         supabase.from('appointments').select('*').eq('person_id', personId).order('appointment_date'),
       ]);
       if (personRes.data && !personName) {
-        setPersonName(personRes.data.name ?? personRes.data.first_name ?? null);
+        setPersonName(personRes.data.name ?? null);
       }
       setAppts(apptRes.data ?? []);
     } catch (_) { setAppts([]); }

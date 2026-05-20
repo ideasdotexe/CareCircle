@@ -8,9 +8,32 @@ import { IconShield, IconPill, IconPulse, IconDoc, IconPeople } from '../compone
 import CaregiverTabBar from '../components/CaregiverTabBar';
 import { supabase } from '../lib/supabase';
 
+const PERM_KEYS = ['vitals', 'medications', 'reports', 'profile', 'appointments', 'activity'];
+function parsePerms(raw) {
+  const full = {};
+  PERM_KEYS.forEach(k => { full[k] = { view: true, contribute: true }; });
+  if (!raw) return full;
+  if (Array.isArray(raw)) {
+    const p = {};
+    PERM_KEYS.forEach(k => { p[k] = { view: raw.includes(k), contribute: raw.includes(k) }; });
+    return p;
+  }
+  if (typeof raw === 'object') {
+    const p = {};
+    PERM_KEYS.forEach(k => {
+      const v = raw[k];
+      if (v && typeof v === 'object') p[k] = { view: v.view !== false, contribute: !!v.contribute };
+      else p[k] = { view: v !== false, contribute: v !== false };
+    });
+    return p;
+  }
+  return full;
+}
+
 export default function CaregiverPeopleScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [persons, setPersons] = useState([]);
+  const [permMap, setPermMap] = useState({});
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -20,12 +43,32 @@ export default function CaregiverPeopleScreen({ navigation }) {
       if (!user) return;
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       setProfile(p);
+      const userEmail = (user.email || '').toLowerCase();
+      let personIds = [];
+      const pm = {};
+
       const { data: rels } = await supabase
         .from('caregiver_relationships')
-        .select('id, person_id, status')
+        .select('person_id, permissions')
         .eq('caregiver_id', user.id)
-        .neq('status', 'revoked');
-      const personIds = (rels || []).map(r => r.person_id).filter(Boolean);
+        .neq('access_revoked', true);
+      (rels || []).forEach(r => {
+        if (r.person_id) { personIds.push(r.person_id); pm[r.person_id] = parsePerms(r.permissions); }
+      });
+      personIds = [...new Set(personIds)];
+
+      if (!personIds.length) {
+        const [{ data: byId }, { data: byEmail }] = await Promise.all([
+          supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_id', user.id).eq('status', 'accepted'),
+          supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_email', userEmail).eq('status', 'accepted'),
+        ]);
+        [...(byId || []), ...(byEmail || [])].forEach(r => {
+          if (r.person_id && !pm[r.person_id]) { personIds.push(r.person_id); pm[r.person_id] = parsePerms(r.permissions); }
+        });
+        personIds = [...new Set(personIds)];
+      }
+
+      setPermMap(pm);
       if (personIds.length) {
         const { data: ps } = await supabase.from('persons').select('*').in('id', personIds);
         setPersons(ps || []);
@@ -39,6 +82,7 @@ export default function CaregiverPeopleScreen({ navigation }) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const active = persons[activeIdx];
+  const perms  = active ? (permMap[active.id] || parsePerms(null)) : parsePerms(null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -64,9 +108,9 @@ export default function CaregiverPeopleScreen({ navigation }) {
               return (
                 <TouchableOpacity key={p.id} onPress={() => setActiveIdx(i)} style={[styles.personChip, isActive && styles.personChipActive]}>
                   <View style={[styles.personInit, { backgroundColor: tint }]}>
-                    <Text style={styles.personInitText}>{(p.first_name || '?')[0]}</Text>
+                    <Text style={styles.personInitText}>{(p.name || '?')[0]}</Text>
                   </View>
-                  <Text style={[styles.personChipName, isActive && { color: '#fff' }]}>{p.first_name}</Text>
+                  <Text style={[styles.personChipName, isActive && { color: '#fff' }]}>{p.name}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -77,18 +121,34 @@ export default function CaregiverPeopleScreen({ navigation }) {
               <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
                 <View style={styles.recipientCard}>
                   <Text style={styles.recipientEyebrow}>{(active.relationship || '').toUpperCase()}</Text>
-                  <Text style={styles.recipientName}>{active.first_name} {active.last_name || ''}</Text>
+                  <Text style={styles.recipientName}>{active.name}</Text>
                 </View>
               </View>
               <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
                 <Text style={styles.sectionTitle}>Quick access</Text>
                 <View style={styles.grid}>
                   <Tile label="Visit" sub="Start" onPress={() => navigation.navigate('CaregiverVisit', { personId: active.id })} icon={IconPill} />
-                  <Tile label="Vitals" sub="Log" onPress={() => navigation.navigate('CaregiverVitalsLog', { personId: active.id })} icon={IconPulse} />
-                  <Tile label="Meds" sub="Today" onPress={() => navigation.navigate('Medications', { personId: active.id })} icon={IconPill} />
-                  <Tile label="Notes" sub="Add" onPress={() => navigation.navigate('CaregiverVisitNote', { personId: active.id })} icon={IconDoc} />
-                  <Tile label="Documents" sub="Open" onPress={() => navigation.navigate('DocsHome', { personId: active.id })} icon={IconDoc} />
-                  <Tile label="Team" sub="Contacts" onPress={() => navigation.navigate('CareTeam', { personId: active.id })} icon={IconPeople} />
+                  {perms.vitals?.view && (
+                    <Tile label="Vitals" sub={perms.vitals.contribute ? 'Log' : 'View'}
+                      onPress={() => perms.vitals.contribute
+                        ? navigation.navigate('CaregiverVitalsLog', { personId: active.id })
+                        : navigation.navigate('VitalsHistory', { personId: active.id, personName: active.name })}
+                      icon={IconPulse} />
+                  )}
+                  {perms.medications?.view && (
+                    <Tile label="Meds" sub="Today" onPress={() => navigation.navigate('Medications', { personId: active.id })} icon={IconPill} />
+                  )}
+                  {perms.activity?.contribute && (
+                    <Tile label="Notes" sub="Add" onPress={() => navigation.navigate('CaregiverVisitNote', { personId: active.id })} icon={IconDoc} />
+                  )}
+                  {perms.reports?.view && (
+                    <Tile label="Documents" sub={perms.reports.contribute ? 'View & upload' : 'View'}
+                      onPress={() => navigation.navigate('DocsHome', { personId: active.id })} icon={IconDoc} />
+                  )}
+                  {perms.appointments?.view && (
+                    <Tile label="Appts" sub="Calendar"
+                      onPress={() => navigation.navigate('AppointmentsScreen', { personId: active.id, personName: active.name })} icon={IconPeople} />
+                  )}
                 </View>
               </View>
             </>

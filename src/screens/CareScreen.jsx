@@ -1,8 +1,11 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Platform, Alert } from 'react-native';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Modal, Platform, Alert, Animated, ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors } from '../theme';
 import { IconPlus } from '../components/Icons';
 import TabBar from '../components/TabBar';
@@ -10,49 +13,287 @@ import { supabase } from '../lib/supabase';
 
 const C = {
   cream: '#F6F1EA', ink: '#1A1F1D', forest: '#1F3D38', forestDeep: '#15302C',
-  terracotta: '#C66E4E', muted: '#6B6862', mutedSoft: '#9A968F',
+  terracotta: '#C66E4E', terracottaSoft: '#E9CFC1',
+  muted: '#6B6862', mutedSoft: '#9A968F',
   line: '#E8E0D2', lineSoft: '#EFE8DA', sageSoft: '#DDE4D6',
 };
+
+// ── Permission sections ───────────────────────────────────────────────────────
+
+const SECTIONS = [
+  { key: 'vitals',       label: 'Vitals',                  desc: 'Blood pressure, sugar, weight…', emoji: '📊' },
+  { key: 'medications',  label: 'Medications',              desc: 'Current meds & schedules',       emoji: '💊' },
+  { key: 'reports',      label: 'Reports & prescriptions',  desc: 'Documents & lab results',        emoji: '📄' },
+  { key: 'profile',      label: 'Profile information',      desc: 'Conditions, allergies, info',    emoji: '👤' },
+  { key: 'appointments', label: 'Appointments',             desc: 'Upcoming & past visits',         emoji: '📅' },
+  { key: 'activity',     label: 'Activity history',         desc: 'Daily logs & notes',             emoji: '🕐' },
+];
+
+function defaultPerms() {
+  const p = {};
+  SECTIONS.forEach(({ key }) => { p[key] = { view: true, contribute: false }; });
+  return p;
+}
+
+function parsePerms(raw) {
+  const defaults = defaultPerms();
+  if (!raw) return defaults;
+  // Legacy array format: ['vitals','medications',…]
+  if (Array.isArray(raw)) {
+    const p = {};
+    SECTIONS.forEach(({ key }) => { p[key] = { view: raw.includes(key), contribute: false }; });
+    return p;
+  }
+  if (typeof raw === 'object') {
+    const p = {};
+    SECTIONS.forEach(({ key }) => {
+      const v = raw[key];
+      if (typeof v === 'object' && v !== null) {
+        p[key] = { view: v.view !== false, contribute: !!v.contribute };
+      } else {
+        p[key] = { view: v !== false, contribute: false };
+      }
+    });
+    return p;
+  }
+  return defaults;
+}
+
+function permSummary(raw) {
+  const p = parsePerms(raw);
+  const on = SECTIONS.filter(s => p[s.key]?.view);
+  const contrib = SECTIONS.filter(s => p[s.key]?.contribute);
+  if (on.length === 0) return 'No access';
+  if (on.length === SECTIONS.length && contrib.length === SECTIONS.length) return 'Full access · Read & contribute';
+  if (contrib.length > 0) return `${on.length} sections · Read & contribute`;
+  return `${on.length} sections · Read only`;
+}
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function ISearch() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+      <Circle cx={6} cy={6} r={4.5} stroke="#fff" strokeWidth={1.6} />
+      <Path d="M9.5 9.5L13 13" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IPlus() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 13 13" fill="none">
+      <Path d="M6.5 1v11M1 6.5h11" stroke={C.forestDeep} strokeWidth={1.7} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function ICheck() {
+  return (
+    <Svg width={11} height={9} viewBox="0 0 12 10" fill="none">
+      <Path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+function IPencil() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 14 14" fill="none">
+      <Path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke={C.forest} strokeWidth={1.4} strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 function getInitials(name) {
   if (!name) return '?';
   return name.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase();
 }
 
+// ── Permission Edit Sheet ─────────────────────────────────────────────────────
+
+function EditSheet({ visible, rel, persons, onClose, onSave }) {
+  const [perms, setPerms] = useState(defaultPerms());
+  const [personId, setPersonId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const slide = useRef(new Animated.Value(600)).current;
+
+  useEffect(() => {
+    if (visible && rel) {
+      setPerms(parsePerms(rel.permissions));
+      setPersonId(rel.person_id || persons[0]?.id || '');
+      Animated.spring(slide, { toValue: 0, useNativeDriver: true, tension: 60, friction: 12 }).start();
+    } else {
+      Animated.timing(slide, { toValue: 600, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [visible, rel]);
+
+  const toggleView = (key) => {
+    setPerms(p => {
+      const cur = p[key];
+      if (cur.view) {
+        // turning off view also turns off contribute
+        return { ...p, [key]: { view: false, contribute: false } };
+      }
+      return { ...p, [key]: { ...cur, view: true } };
+    });
+  };
+
+  const toggleContrib = (key) => {
+    setPerms(p => {
+      const cur = p[key];
+      // contribute requires view
+      return { ...p, [key]: { view: true, contribute: !cur.contribute } };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(rel, personId, perms);
+    setSaving(false);
+  };
+
+  if (!rel) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <TouchableOpacity style={sh.overlay} activeOpacity={1} onPress={onClose} />
+      <Animated.View style={[sh.sheet, { transform: [{ translateY: slide }] }]}>
+        <View style={sh.handle} />
+
+        {/* Caregiver header */}
+        <View style={sh.header}>
+          <View style={[sh.avatar, { backgroundColor: '#3F5D54' }]}>
+            <Text style={sh.avatarText}>{getInitials(rel._name)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={sh.name}>{rel._name}</Text>
+            <Text style={sh.role}>{rel.role || 'Caregiver'}</Text>
+          </View>
+        </View>
+
+        <View style={sh.divider} />
+
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+          {/* Person assignment */}
+          {persons.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <Text style={sh.sectionLabel}>ASSIGNED TO</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row' }}>
+                {persons.map(p => {
+                  const active = personId === p.id;
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      onPress={() => setPersonId(p.id)}
+                      style={[sh.personChip, active && sh.personChipActive]}
+                    >
+                      <Text style={[sh.personChipText, active && { color: '#fff' }]}>{p.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Permission rows */}
+          <Text style={sh.sectionLabel}>ACCESS PERMISSIONS</Text>
+
+          {/* Column headers */}
+          <View style={sh.colHeader}>
+            <View style={{ flex: 1 }} />
+            <Text style={sh.colLabel}>Read</Text>
+            <Text style={sh.colLabel}>Contribute</Text>
+          </View>
+
+          {SECTIONS.map(({ key, label, desc, emoji }) => {
+            const p = perms[key];
+            return (
+              <View key={key} style={sh.row}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                    <Text style={{ fontSize: 15 }}>{emoji}</Text>
+                    <Text style={sh.rowLabel}>{label}</Text>
+                  </View>
+                  <Text style={sh.rowDesc}>{desc}</Text>
+                </View>
+                {/* View toggle */}
+                <TouchableOpacity
+                  onPress={() => toggleView(key)}
+                  style={[sh.toggle, p.view && sh.toggleOn]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {p.view && <ICheck />}
+                </TouchableOpacity>
+                {/* Contribute toggle */}
+                <TouchableOpacity
+                  onPress={() => toggleContrib(key)}
+                  style={[sh.toggle, p.contribute && sh.toggleContrib]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {p.contribute && <ICheck />}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+
+          <Text style={sh.hint}>Contribute = can log, upload, or add entries. Read = view only.</Text>
+        </ScrollView>
+
+        {/* Actions */}
+        <View style={sh.actions}>
+          <TouchableOpacity style={sh.cancelBtn} onPress={onClose}>
+            <Text style={sh.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[sh.saveBtn, saving && { opacity: 0.6 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={sh.saveText}>Save changes</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+
 export default function CareScreen({ navigation }) {
   const [caregivers, setCaregivers] = useState([]);
   const [persons, setPersons] = useState([]);
-  const [assignModal, setAssignModal] = useState(null); // { caregiver: rel }
-  const [assignPersonId, setAssignPersonId] = useState('');
-  const [assignAccess, setAssignAccess] = useState({ vitals: true, medications: true, documents: true });
-  const [assigning, setAssigning] = useState(false);
+  const [editSheet, setEditSheet] = useState(null);
 
   const load = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Accepted caregivers on my account (no FK joins — fetch separately)
       try {
-        const { data: rels } = await supabase
-          .from('caregiver_relationships')
-          .select('id, caregiver_id, owner_id, person_id, status, role')
+        const { data: reqs } = await supabase
+          .from('caregiver_requests')
+          .select('id, caregiver_id, caregiver_email, person_id, role, permissions')
           .eq('owner_id', user.id)
           .eq('status', 'accepted');
-        const cgIds = (rels || []).map(r => r.caregiver_id).filter(Boolean);
+        const cgIds = (reqs || []).map(r => r.caregiver_id).filter(Boolean);
         let nameMap = {};
         if (cgIds.length) {
-          const { data: profs } = await supabase.from('profiles').select('id, full_name, first_name, last_name').in('id', cgIds);
-          (profs || []).forEach(p => {
-            nameMap[p.id] = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
-          });
+          const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', cgIds);
+          (profs || []).forEach(p => { nameMap[p.id] = p.full_name || ''; });
         }
-        setCaregivers((rels || []).map(r => ({ ...r, _name: nameMap[r.caregiver_id] || 'Caregiver' })));
+        const seen = new Set();
+        const deduped = (reqs || []).filter(r => {
+          const key = r.caregiver_id || r.caregiver_email;
+          if (!key || seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+        setCaregivers(deduped.map(r => ({
+          ...r, _name: nameMap[r.caregiver_id] || r.caregiver_email || 'Caregiver',
+        })));
       } catch (_) { setCaregivers([]); }
 
-      // Owner's persons for assignment
       try {
-        const { data: ps } = await supabase.from('persons').select('id, first_name, last_name').eq('user_id', user.id);
+        const { data: ps } = await supabase.from('persons').select('id, name, relationship').eq('user_id', user.id);
         setPersons(ps || []);
       } catch (_) {}
     } catch (_) {}
@@ -60,32 +301,48 @@ export default function CareScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const openAssign = (rel) => {
-    setAssignModal(rel);
-    setAssignPersonId(persons[0]?.id || '');
-    setAssignAccess({ vitals: true, medications: true, documents: true });
-  };
+  const openEdit = (rel) => setEditSheet(rel);
 
-  const handleAssign = async () => {
-    if (!assignModal || !assignPersonId) return;
-    setAssigning(true);
+  const handleSave = async (rel, personId, perms) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error: assignErr } = await supabase.from('caregiver_relationships').upsert({
-        caregiver_id: assignModal.caregiver_id,
-        owner_id: user.id,
-        person_id: assignPersonId,
-        status: 'accepted',
-        role: 'caregiver',
-      }, { onConflict: 'caregiver_id,owner_id,person_id' });
-      if (assignErr) throw assignErr;
-      setAssignModal(null);
+
+      // 1. Update caregiver_requests (owner always has access to their own rows)
+      const { error } = await supabase
+        .from('caregiver_requests')
+        .update({ person_id: personId || null, permissions: perms })
+        .eq('id', rel.id)
+        .eq('owner_id', user.id);
+      if (error) throw error;
+
+      // 2. Write to caregiver_relationships so the caregiver portal can read it.
+      //    Try update first; if no row exists yet, insert.
+      if (rel.caregiver_id && personId) {
+        const { data: updated } = await supabase
+          .from('caregiver_relationships')
+          .update({ person_id: personId, permissions: perms, access_revoked: false })
+          .eq('profile_owner_id', user.id)
+          .eq('caregiver_id', rel.caregiver_id)
+          .select('id');
+
+        if (!updated || updated.length === 0) {
+          await supabase.from('caregiver_relationships').insert({
+            caregiver_id: rel.caregiver_id,
+            profile_owner_id: user.id,
+            person_id: personId,
+            role: rel.role || 'caregiver',
+            caregiver_email: rel.caregiver_email || null,
+            permissions: perms,
+            access_revoked: false,
+          });
+        }
+      }
+
+      setEditSheet(null);
       load();
-      if (Platform.OS === 'web') window.alert('Caregiver assigned successfully.');
-      else Alert.alert('Done', 'Caregiver assigned successfully.');
     } catch (e) {
-      Alert.alert('Error', e.message || 'Could not assign.');
-    } finally { setAssigning(false); }
+      Alert.alert('Error', e.message || 'Could not save.');
+    }
   };
 
   return (
@@ -99,30 +356,25 @@ export default function CareScreen({ navigation }) {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={{ paddingHorizontal: 24, paddingTop: 14 }}>
           <Text style={styles.hero}>The people{'\n'}who help.</Text>
-          <Text style={styles.heroSub}>Find caregivers, invite family, manage who can do what.</Text>
+          <Text style={styles.heroSub}>Find caregivers, invite family, manage who can see what.</Text>
         </View>
 
-        {/* ── Action buttons ── */}
+        {/* Action buttons */}
         <View style={styles.btnRow}>
           <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => navigation.navigate('FindCaregiver')}>
-            <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-              <Circle cx={6} cy={6} r={4.5} stroke="#fff" strokeWidth={1.6} />
-              <Path d="M9.5 9.5L13 13" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" />
-            </Svg>
+            <ISearch />
             <Text style={styles.primaryBtnText}>Find caregiver</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.secondaryBtn, { flex: 1 }]}
             onPress={() => navigation.navigate('InviteCaregiver', { personId: persons[0]?.id })}
           >
-            <Svg width={13} height={13} viewBox="0 0 13 13" fill="none">
-              <Path d="M6.5 1v11M1 6.5h11" stroke={C.forestDeep} strokeWidth={1.7} strokeLinecap="round" />
-            </Svg>
+            <IPlus />
             <Text style={styles.secondaryBtnText}>Invite</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── My care team ── */}
+        {/* Care team */}
         <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
           <View style={styles.sectionHead}>
             <Text style={styles.sectionTitle}>Your care team</Text>
@@ -130,9 +382,10 @@ export default function CareScreen({ navigation }) {
               <Text style={styles.sectionAction}>Find more</Text>
             </TouchableOpacity>
           </View>
+
           {caregivers.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No caregivers yet. Find a professional and send a request.</Text>
+              <Text style={styles.emptyText}>No caregivers yet. Find a professional or invite someone you trust.</Text>
               <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('FindCaregiver')}>
                 <IconPlus color={colors.forest} />
                 <Text style={styles.emptyBtnText}>Find caregiver</Text>
@@ -140,80 +393,54 @@ export default function CareScreen({ navigation }) {
             </View>
           ) : (
             caregivers.map(rel => {
-              const ini = getInitials(rel._name);
-              const assigned = rel.person_id ? persons.find(p => p.id === rel.person_id) : null;
+              const assigned = persons.find(p => p.id === rel.person_id);
+              const summary = permSummary(rel.permissions);
               return (
                 <View key={rel.id} style={styles.teamCard}>
+                  {/* Avatar + name */}
                   <View style={[styles.teamAvatar, { backgroundColor: '#3F5D54' }]}>
-                    <Text style={styles.teamAvatarText}>{ini}</Text>
+                    <Text style={styles.teamAvatarText}>{getInitials(rel._name)}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.teamName}>{rel._name}</Text>
-                    <Text style={styles.teamMeta}>
-                      {assigned ? `Assigned to ${assigned.first_name}` : 'Not yet assigned'}
-                    </Text>
+                    <Text style={styles.teamRole}>{rel.role || 'Caregiver'}</Text>
+                    {assigned && (
+                      <Text style={styles.teamAssigned}>Caring for {assigned.name}</Text>
+                    )}
                   </View>
-                  <TouchableOpacity style={styles.assignBtn} onPress={() => openAssign(rel)}>
-                    <Text style={styles.assignBtnText}>{rel.person_id ? 'Reassign' : 'Assign'}</Text>
+
+                  {/* Edit button */}
+                  <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(rel)}>
+                    <IPencil />
+                    <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
+
+                  {/* Access summary bar */}
+                  <View style={styles.accessBar}>
+                    <View style={styles.accessDot} />
+                    <Text style={styles.accessSummary}>{summary}</Text>
+                  </View>
                 </View>
               );
             })
           )}
         </View>
-
-        {/* ── Assign caregiver modal ── */}
-        <Modal visible={!!assignModal} transparent animationType="slide" onRequestClose={() => setAssignModal(null)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
-              <Text style={styles.modalTitle}>Assign caregiver</Text>
-              <Text style={styles.modalSub}>Choose a person and what {assignModal?._name} can access.</Text>
-
-              <Text style={styles.modalLabel}>ASSIGN TO</Text>
-              {persons.map(p => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.personRow, assignPersonId === p.id && styles.personRowActive]}
-                  onPress={() => setAssignPersonId(p.id)}
-                >
-                  <Text style={[styles.personRowText, assignPersonId === p.id && { color: '#fff' }]}>
-                    {p.first_name} {p.last_name || ''}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              <Text style={[styles.modalLabel, { marginTop: 16 }]}>ACCESS</Text>
-              {[['vitals', 'Vitals'], ['medications', 'Medications'], ['documents', 'Documents']].map(([key, label]) => (
-                <TouchableOpacity key={key} style={styles.accessRow} onPress={() => setAssignAccess(a => ({ ...a, [key]: !a[key] }))}>
-                  <View style={[styles.checkbox, assignAccess[key] && styles.checkboxOn]}>
-                    {assignAccess[key] && (
-                      <Svg width={12} height={10} viewBox="0 0 12 10">
-                        <Path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      </Svg>
-                    )}
-                  </View>
-                  <Text style={styles.accessLabel}>{label}</Text>
-                </TouchableOpacity>
-              ))}
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setAssignModal(null)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.confirmBtn, assigning && { opacity: 0.6 }]} onPress={handleAssign} disabled={assigning || !assignPersonId}>
-                  <Text style={styles.confirmBtnText}>{assigning ? 'Saving…' : 'Confirm'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
       </ScrollView>
 
       <TabBar active={2} navigation={navigation} />
+
+      <EditSheet
+        visible={!!editSheet}
+        rel={editSheet}
+        persons={persons}
+        onClose={() => setEditSheet(null)}
+        onSave={handleSave}
+      />
     </SafeAreaView>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.cream },
@@ -230,32 +457,88 @@ const styles = StyleSheet.create({
   sectionTitle: { fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep, fontWeight: '500' },
   sectionAction: { fontSize: 12, color: C.forest, fontWeight: '500' },
   empty: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 22, alignItems: 'center' },
-  emptyText: { fontSize: 13, color: C.muted, textAlign: 'center' },
+  emptyText: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 18 },
   emptyBtn: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
   emptyBtnText: { fontSize: 13, color: C.forest, fontWeight: '600' },
-  teamCard: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  teamAvatar: { width: 44, height: 44, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+
+  // Team card
+  teamCard: {
+    backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line,
+    padding: 14, marginBottom: 10,
+  },
+  teamAvatar: { width: 44, height: 44, borderRadius: 99, alignItems: 'center', justifyContent: 'center', position: 'absolute', top: 14, left: 14 },
   teamAvatarText: { color: '#fff', fontFamily: 'Georgia', fontSize: 14, fontWeight: '500' },
-  teamName: { fontSize: 14, fontWeight: '600', color: C.ink },
-  teamMeta: { fontSize: 11.5, color: C.muted, marginTop: 2 },
-  assignBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: C.sageSoft, borderWidth: 1, borderColor: '#A8B5A0' },
-  assignBtnText: { fontSize: 12, color: C.forest, fontWeight: '600' },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontFamily: 'Georgia', fontSize: 20, color: C.forestDeep, fontWeight: '500', marginBottom: 4 },
-  modalSub: { fontSize: 13, color: C.muted, marginBottom: 20 },
-  modalLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 },
-  personRow: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: C.line, marginBottom: 6, backgroundColor: '#fff' },
-  personRowActive: { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
-  personRowText: { fontSize: 14, fontWeight: '500', color: C.ink },
-  accessRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  checkboxOn: { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
-  accessLabel: { fontSize: 14, color: C.ink, fontWeight: '500' },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 24 },
-  cancelBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
-  cancelBtnText: { fontSize: 14, color: C.muted, fontWeight: '500' },
-  confirmBtn: { flex: 1, height: 48, borderRadius: 14, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center' },
-  confirmBtnText: { fontSize: 14, color: '#fff', fontWeight: '600' },
+  teamName: { fontSize: 14.5, fontWeight: '600', color: C.ink, marginLeft: 56 },
+  teamRole: { fontSize: 11.5, color: C.mutedSoft, marginLeft: 56, marginTop: 1 },
+  teamAssigned: { fontSize: 11.5, color: C.forest, marginLeft: 56, marginTop: 2, fontWeight: '500' },
+  editBtn: {
+    position: 'absolute', top: 14, right: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9,
+    backgroundColor: C.sageSoft, borderWidth: 1, borderColor: '#A8B5A0',
+  },
+  editBtnText: { fontSize: 12, color: C.forest, fontWeight: '600' },
+  accessBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 12, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: C.lineSoft,
+    marginLeft: 56,
+  },
+  accessDot: { width: 7, height: 7, borderRadius: 99, backgroundColor: '#7AB87A' },
+  accessSummary: { fontSize: 11.5, color: C.muted },
+});
+
+// ── Sheet styles ──────────────────────────────────────────────────────────────
+
+const sh = StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.38)' },
+  sheet: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 22, paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 14, elevation: 20,
+  },
+  handle: { width: 38, height: 4, borderRadius: 99, backgroundColor: '#D4CEC5', alignSelf: 'center', marginBottom: 18 },
+
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  avatar: { width: 46, height: 46, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontFamily: 'Georgia', fontSize: 15, fontWeight: '500' },
+  name: { fontFamily: 'Georgia', fontSize: 19, color: C.forestDeep, fontWeight: '500' },
+  role: { fontSize: 12, color: C.muted, marginTop: 2 },
+  divider: { height: 1, backgroundColor: C.lineSoft, marginVertical: 16 },
+
+  sectionLabel: { fontSize: 10.5, fontWeight: '700', color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },
+
+  personChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99,
+    borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', marginRight: 6,
+  },
+  personChipActive: { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
+  personChipText: { fontSize: 13, fontWeight: '500', color: C.ink },
+
+  // Permission table
+  colHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
+  colLabel: { width: 80, textAlign: 'center', fontSize: 10.5, fontWeight: '700', color: C.muted, letterSpacing: 0.4, textTransform: 'uppercase' },
+
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
+  rowLabel: { fontSize: 13.5, fontWeight: '500', color: C.ink },
+  rowDesc: { fontSize: 11, color: C.mutedSoft, marginTop: 2 },
+
+  toggle: {
+    width: 80, alignItems: 'center', justifyContent: 'center',
+    height: 30, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff',
+  },
+  toggleOn: { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
+  toggleContrib: { backgroundColor: C.terracotta, borderColor: C.terracotta },
+
+  hint: { fontSize: 11, color: C.mutedSoft, marginTop: 14, marginBottom: 6, lineHeight: 16 },
+
+  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  cancelBtn: { flex: 1, height: 50, borderRadius: 14, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  cancelText: { fontSize: 14, color: C.muted, fontWeight: '500' },
+  saveBtn: { flex: 2, height: 50, borderRadius: 14, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center' },
+  saveText: { fontSize: 14, color: '#fff', fontWeight: '600' },
 });

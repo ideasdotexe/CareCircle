@@ -24,18 +24,74 @@ export default function InviteCaregiverScreen({ navigation, route }) {
     setSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('caregiver_relationships').insert({
-        owner_id: user.id,
-        person_id: personId,
-        caregiver_email: email.trim(),
-        role,
-        status: 'pending',
-        permissions: perms,
-      });
-      Alert.alert('Invite sent', `We've emailed ${email}.`);
+      const normalEmail = email.trim().toLowerCase();
+
+      // ── Resolve caregiver user ID by email (exact match) ───────────
+      let caregiverId = null;
+      const { data: cp } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', normalEmail)
+        .maybeSingle();
+      caregiverId = cp?.id || null;
+
+      // ── Block if already accepted or pending ──────────────────────
+      const { data: existing } = await supabase
+        .from('caregiver_requests')
+        .select('id, status')
+        .eq('owner_id', user.id)
+        .eq('caregiver_email', normalEmail)
+        .in('status', ['pending', 'accepted'])
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        const msg = existing.status === 'accepted'
+          ? `${normalEmail} is already part of your care team.`
+          : `A request to ${normalEmail} is already pending.`;
+        Alert.alert('Already exists', msg);
+        setSending(false);
+        return;
+      }
+
+      // ── INSERT ────────────────────────────────────────────────────
+      const { error: insertErr } = await supabase
+        .from('caregiver_requests')
+        .insert({
+          owner_id: user.id,
+          caregiver_id: caregiverId,
+          caregiver_email: normalEmail,
+          role,
+          status: 'pending',
+          permissions: perms,
+          ...(personId ? { person_id: personId } : {}),
+        });
+
+      if (insertErr) {
+        if (insertErr.code === '23505' || insertErr.message?.includes('duplicate') || insertErr.message?.includes('unique')) {
+          Alert.alert('Already sent', `A request to ${normalEmail} is already pending.`);
+          return;
+        }
+        throw insertErr;
+      }
+
+      // ── In-app notification for the caregiver ───────────────────────
+      if (caregiverId) {
+        const { data: ownerProfile } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+        await supabase.from('notifications').insert({
+          user_id: caregiverId,
+          type: 'care_request',
+          title: 'New care request',
+          body: `${ownerProfile?.full_name || 'Someone'} invited you to be their caregiver.`,
+          read: false,
+        });
+      }
+
+      Alert.alert('Request sent', `Request sent to ${normalEmail}.`);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Could not send', e.message || String(e));
+      Alert.alert('Error', e.message || String(e));
     } finally {
       setSending(false);
     }

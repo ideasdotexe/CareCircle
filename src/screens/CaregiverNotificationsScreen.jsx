@@ -137,23 +137,50 @@ export default function CaregiverNotificationsScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Pending requests sent to this caregiver
-      const { data: reqs } = await supabase
-        .from('caregiver_requests')
-        .select('*')
-        .eq('caregiver_id', user.id)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+      // Pending requests — two separate queries, merge results
+      const userEmail = (user.email || '').toLowerCase();
+
+      const [{ data: byId }, { data: byEmail }] = await Promise.all([
+        supabase
+          .from('caregiver_requests')
+          .select('*')
+          .eq('caregiver_id', user.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('caregiver_requests')
+          .select('*')
+          .eq('caregiver_email', userEmail)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+      ]);
+
+      // Merge + deduplicate by id
+      const seen = new Set();
+      const reqs = [...(byId || []), ...(byEmail || [])]
+        .filter(r => !seen.has(r.id) && seen.add(r.id))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      // Backfill caregiver_id on email-matched rows
+      const unlinked = reqs.filter(r => !r.caregiver_id);
+      if (unlinked.length) {
+        await Promise.all(unlinked.map(r =>
+          supabase.from('caregiver_requests')
+            .update({ caregiver_id: user.id })
+            .eq('id', r.id)
+            .catch(() => {})
+        ));
+      }
 
       // Enrich with owner name
       if (reqs?.length) {
         const ownerIds = [...new Set(reqs.map(r => r.owner_id).filter(Boolean))];
         const { data: owners } = ownerIds.length
-          ? await supabase.from('profiles').select('id, full_name, first_name, last_name').in('id', ownerIds)
+          ? await supabase.from('profiles').select('id, full_name').in('id', ownerIds)
           : { data: [] };
         const ownerMap = {};
         (owners || []).forEach(o => {
-          ownerMap[o.id] = o.full_name || `${o.first_name || ''} ${o.last_name || ''}`.trim();
+          ownerMap[o.id] = o.full_name || '';
         });
         setRequests(reqs.map(r => ({ ...r, owner_name: ownerMap[r.owner_id] || '' })));
       } else {
@@ -176,7 +203,7 @@ export default function CaregiverNotificationsScreen({ navigation }) {
         .from('caregiver_relationships')
         .select('person_id')
         .eq('caregiver_id', user.id)
-        .eq('status', 'accepted');
+        .neq('access_revoked', true);
 
       const personIds = (rels || []).map(r => r.person_id).filter(Boolean);
       if (personIds.length) {
@@ -216,26 +243,45 @@ export default function CaregiverNotificationsScreen({ navigation }) {
 
   const handleAccept = async (req) => {
     try {
+      const caregiverId = req.caregiver_id || (await supabase.auth.getUser()).data.user?.id;
+      // Accept this request and cancel all other pending ones from the same owner to prevent duplicates
       await supabase.from('caregiver_requests').update({ status: 'accepted' }).eq('id', req.id);
-      // Create caregiver_relationships entry
-      await supabase.from('caregiver_relationships').insert({
-        caregiver_id: req.caregiver_id,
-        owner_id: req.owner_id,
-        person_id: req.person_id || null,
-        status: 'accepted',
-        role: 'caregiver',
-      });
+      await supabase
+        .from('caregiver_requests')
+        .update({ status: 'cancelled' })
+        .eq('owner_id', req.owner_id)
+        .eq('caregiver_email', (req.caregiver_email || '').toLowerCase())
+        .eq('status', 'pending')
+        .neq('id', req.id);
+      // Try to create caregiver_relationships — may be blocked by RLS, owner will also write it on assign
+      try {
+        const { data: existing } = await supabase
+          .from('caregiver_relationships')
+          .select('id')
+          .eq('caregiver_id', caregiverId)
+          .eq('profile_owner_id', req.owner_id)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from('caregiver_relationships').insert({
+            caregiver_id: caregiverId,
+            profile_owner_id: req.owner_id,
+            person_id: req.person_id || null,
+            role: req.role || 'caregiver',
+            caregiver_email: req.caregiver_email || null,
+            permissions: req.permissions || null,
+            access_revoked: false,
+          });
+        }
+      } catch (_) {}
       // Notify owner that request was accepted (best-effort)
       try {
         const { data: { user } } = await supabase.auth.getUser();
         const { data: cgProfile } = await supabase
           .from('profiles')
-          .select('full_name, first_name, last_name')
+          .select('full_name')
           .eq('id', user.id)
           .maybeSingle();
-        const cgName = cgProfile?.full_name
-          || `${cgProfile?.first_name || ''} ${cgProfile?.last_name || ''}`.trim()
-          || 'Your caregiver';
+        const cgName = cgProfile?.full_name || 'Your caregiver';
         await supabase.from('notifications').insert({
           user_id: req.owner_id,
           type: 'request_accepted',
