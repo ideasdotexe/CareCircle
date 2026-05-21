@@ -17,10 +17,9 @@ export default function SectionRow({
     activeOpacity: 0.7,
     children: [/*#__PURE__*/_jsx(View, {
       style: [styles.iconBox, completed && styles.iconBoxDone],
-      children: /*#__PURE__*/_jsx(Text, {
-        style: styles.icon,
-        children: icon
-      })
+      children: typeof icon === 'string'
+        ? /*#__PURE__*/_jsx(Text, { style: styles.icon, children: icon })
+        : icon
     }), /*#__PURE__*/_jsxs(View, {
       style: styles.content,
       children: [/*#__PURE__*/_jsx(Text, {

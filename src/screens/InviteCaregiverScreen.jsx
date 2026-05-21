@@ -26,14 +26,18 @@ export default function InviteCaregiverScreen({ navigation, route }) {
       const { data: { user } } = await supabase.auth.getUser();
       const normalEmail = email.trim().toLowerCase();
 
-      // ── Resolve caregiver user ID by email (exact match) ───────────
+      // ── Resolve caregiver user ID by email using SECURITY DEFINER RPC ─
       let caregiverId = null;
-      const { data: cp } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', normalEmail)
-        .maybeSingle();
-      caregiverId = cp?.id || null;
+      try {
+        const { data: found } = await supabase
+          .rpc('search_caregiver_by_email', { p_email: normalEmail });
+        caregiverId = found?.[0]?.id || null;
+      } catch (_) {
+        // Fallback to direct profiles query
+        const { data: cp } = await supabase
+          .from('profiles').select('id').eq('email', normalEmail).maybeSingle();
+        caregiverId = cp?.id || null;
+      }
 
       // ── Block if already accepted or pending ──────────────────────
       const { data: existing } = await supabase
@@ -54,11 +58,17 @@ export default function InviteCaregiverScreen({ navigation, route }) {
         return;
       }
 
+      // ── Fetch owner's own name (owner can always read their own profile) ──
+      const { data: ownerProfile } = await supabase
+        .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      const ownerName = ownerProfile?.full_name || '';
+
       // ── INSERT ────────────────────────────────────────────────────
       const { error: insertErr } = await supabase
         .from('caregiver_requests')
         .insert({
           owner_id: user.id,
+          owner_name: ownerName,
           caregiver_id: caregiverId,
           caregiver_email: normalEmail,
           role,
@@ -77,13 +87,11 @@ export default function InviteCaregiverScreen({ navigation, route }) {
 
       // ── In-app notification for the caregiver ───────────────────────
       if (caregiverId) {
-        const { data: ownerProfile } = await supabase
-          .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
         await supabase.from('notifications').insert({
           user_id: caregiverId,
           type: 'care_request',
           title: 'New care request',
-          body: `${ownerProfile?.full_name || 'Someone'} invited you to be their caregiver.`,
+          body: `${ownerName || 'Someone'} invited you to be their caregiver.`,
           read: false,
         });
       }

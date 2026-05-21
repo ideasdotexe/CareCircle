@@ -5,6 +5,16 @@ import Card from '../components/Card';
 import SectionRow from '../components/SectionRow';
 import { supabase } from '../lib/supabase';
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import Svg, { Path, Circle, Polygon } from 'react-native-svg';
+
+const IC = '#1F3D38';
+const IUser  = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Circle,{cx:'12',cy:'8',r:'4',stroke:IC,strokeWidth:'1.8'}), React.createElement(Path,{d:'M4 20c0-4 3.6-7 8-7s8 3 8 7',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}));
+const IHeart = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Path,{d:'M12 21C12 21 3 14 3 8a5 5 0 019-3 5 5 0 019 3c0 6-9 13-9 13z',stroke:IC,strokeWidth:'1.8',strokeLinejoin:'round'}));
+const IWarn  = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Polygon,{points:'12,3 22,21 2,21',stroke:IC,strokeWidth:'1.8',strokeLinejoin:'round'}), React.createElement(Path,{d:'M12 10v4',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}), React.createElement(Path,{d:'M12 17.5v.5',stroke:IC,strokeWidth:'2',strokeLinecap:'round'}));
+const IPill  = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Path,{d:'M4.5 12.5L12 5a5 5 0 017 7l-7.5 7.5a5 5 0 01-7-7z',stroke:IC,strokeWidth:'1.8',strokeLinejoin:'round'}), React.createElement(Path,{d:'M9 9l6 6',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}));
+const ITeam  = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Circle,{cx:'9',cy:'8',r:'3',stroke:IC,strokeWidth:'1.8'}), React.createElement(Path,{d:'M3 19c0-3.3 2.7-6 6-6',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}), React.createElement(Circle,{cx:'17',cy:'8',r:'3',stroke:IC,strokeWidth:'1.8'}), React.createElement(Path,{d:'M21 19c0-3.3-2.7-6-6-6',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}));
+const IPhone = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Path,{d:'M6.6 10.8a15.3 15.3 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.55.6 1 1 0 011 1v3.5a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1H7.5a1 1 0 011 1c0 1.25.2 2.45.6 3.55a1 1 0 01-.25 1L6.6 10.8z',stroke:IC,strokeWidth:'1.8',strokeLinejoin:'round'}));
+const IFlask = () => React.createElement(Svg, {width:18,height:18,viewBox:'0 0 24 24',fill:'none'}, React.createElement(Path,{d:'M9 3v8L4 19a2 2 0 001.8 2.9h12.4A2 2 0 0020 19l-5-8V3',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round',strokeLinejoin:'round'}), React.createElement(Path,{d:'M7 3h10',stroke:IC,strokeWidth:'1.8',strokeLinecap:'round'}));
 async function fetchCounts(personId) {
   const [person, conditions, allergies, medications, careTeam, emergencyContacts, labResults] = await Promise.all([supabase.from('persons').select('sex, weight_kg, height_cm, date_of_birth').eq('id', personId).single(), supabase.from('conditions').select('id', {
     count: 'exact',
@@ -38,43 +48,43 @@ async function fetchCounts(personId) {
 }
 function buildSections(counts) {
   return [{
-    icon: '👤',
+    icon: React.createElement(IUser, null),
     title: 'Basic Info',
     screen: 'BasicInfo',
     completed: counts.basicInfo,
     subtitle: counts.basicInfo ? 'Added' : 'DOB, sex, weight, height'
   }, {
-    icon: '🫀',
+    icon: React.createElement(IHeart, null),
     title: 'Conditions',
     screen: 'Conditions',
     completed: counts.conditions > 0,
     subtitle: counts.conditions > 0 ? `${counts.conditions} condition${counts.conditions !== 1 ? 's' : ''}` : 'Not added yet'
   }, {
-    icon: '⚠️',
+    icon: React.createElement(IWarn, null),
     title: 'Allergies',
     screen: 'Allergies',
     completed: counts.allergies > 0,
     subtitle: counts.allergies > 0 ? `${counts.allergies} allerg${counts.allergies !== 1 ? 'ies' : 'y'}` : 'Not added yet'
   }, {
-    icon: '💊',
+    icon: React.createElement(IPill, null),
     title: 'Medications',
     screen: 'Medications',
     completed: counts.medications > 0,
     subtitle: counts.medications > 0 ? `${counts.medications} medication${counts.medications !== 1 ? 's' : ''}` : 'Not added yet'
   }, {
-    icon: '🩺',
+    icon: React.createElement(ITeam, null),
     title: 'Care Team',
     screen: 'CareTeam',
     completed: counts.careTeam > 0,
     subtitle: counts.careTeam > 0 ? `${counts.careTeam} member${counts.careTeam !== 1 ? 's' : ''}` : 'Not added yet'
   }, {
-    icon: '📞',
+    icon: React.createElement(IPhone, null),
     title: 'Emergency Contacts',
     screen: 'EmergencyContacts',
     completed: counts.emergencyContacts > 0,
     subtitle: counts.emergencyContacts > 0 ? `${counts.emergencyContacts} contact${counts.emergencyContacts !== 1 ? 's' : ''}` : 'Not added yet'
   }, {
-    icon: '🧪',
+    icon: React.createElement(IFlask, null),
     title: 'Lab Results',
     screen: 'LabResults',
     completed: counts.labResults > 0,
@@ -208,9 +218,9 @@ export default function ProfileScreen({
           variant: "outlined",
           children: /*#__PURE__*/_jsxs(View, {
             style: styles.allergyRow,
-            children: [/*#__PURE__*/_jsx(Text, {
+            children: [/*#__PURE__*/_jsx(View, {
               style: styles.allergyIcon,
-              children: "\u26A0\uFE0F"
+              children: React.createElement(IWarn, null)
             }), /*#__PURE__*/_jsxs(View, {
               style: styles.allergyContent,
               children: [/*#__PURE__*/_jsx(Text, {

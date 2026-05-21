@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>CareCircle — Login & Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #ECE4D5; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  *, *::before, *::after { box-sizing: border-box; }
+  /* Newsreader smooth */
+  body { font-feature-settings: "ss01", "ss02"; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+<script type="text/babel" src="reminders-dashboard.jsx"></script>
+<script type="text/babel" src="people.jsx"></script>
+<script type="text/babel" src="add-medication.jsx"></script>
+<script type="text/babel" src="log-reading.jsx"></script>
+<script type="text/babel" src="add-appointment.jsx"></script>
+<script type="text/babel" src="documents.jsx"></script>
+<script type="text/babel" src="caregiver.jsx"></script>
+<script type="text/babel" src="find-caregiver.jsx"></script>
+<script type="text/babel" src="activity.jsx"></script>
+
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  // Wrap an iOS frame around a screen
+  function Phone({ children, dark = false }) {
+    return (
+      <IOSDevice width={390} height={844} dark={dark}>
+        {children}
+      </IOSDevice>
+    );
+  }
+
+  // Each artboard owns its own little flow state — fully interactive.
+  function LoginInteractive() {
+    const [step, setStep] = React.useState('login');
+    return (
+      <Phone>
+        {step === 'login' && <LoginScreen onContinue={() => setStep('onboarding')} />}
+        {step === 'onboarding' && <OnboardingScreen onCreate={() => setStep('dashboard')} />}
+        {step === 'dashboard' && <Dashboard variant="fresh" onAddPerson={() => setStep('onboarding')} />}
+      </Phone>
+    );
+  }
+
+  function OnboardingInteractive() {
+    const [step, setStep] = React.useState('onboarding');
+    return (
+      <Phone>
+        {step === 'onboarding' && <OnboardingScreen onCreate={() => setStep('dashboard')} />}
+        {step === 'dashboard' && <Dashboard variant="fresh" onAddPerson={() => setStep('onboarding')} />}
+      </Phone>
+    );
+  }
+
+  function DashFresh() {
+    const [step, setStep] = React.useState('dashboard');
+    return (
+      <Phone>
+        {step === 'dashboard' && <Dashboard variant="fresh" onAddPerson={() => setStep('onboarding')} />}
+        {step === 'onboarding' && <OnboardingScreen onCreate={() => setStep('dashboard')} />}
+      </Phone>
+    );
+  }
+
+  function DashEstablished() {
+    const [step, setStep] = React.useState('dashboard');
+    return (
+      <Phone>
+        {step === 'dashboard' && <Dashboard variant="established" onAddPerson={() => setStep('onboarding')} />}
+        {step === 'onboarding' && <OnboardingScreen onCreate={() => setStep('dashboard')} />}
+      </Phone>
+    );
+  }
+
+  function App() {
+    return (
+      <DesignCanvas
+        title="CareCircle"
+        subtitle="Login → onboarding → dashboard. Tap through any phone."
+        background="#ECE4D5"
+      >
+        <DCSection id="flow" title="The 90-second first launch">
+          <DCArtboard id="login" label="1 · Sign in · Dear ones" width={390} height={844}>
+            <LoginInteractive />
+          </DCArtboard>
+          <DCArtboard id="login-pro" label="1b · Sign in · Caregiver" width={390} height={844}>
+            <Phone>
+              <LoginScreen initialRole="pro" onContinue={() => {}} />
+            </Phone>
+          </DCArtboard>
+          <DCArtboard id="onboarding" label="2 · About you" width={390} height={844}>
+            <OnboardingInteractive />
+          </DCArtboard>
+          <DCArtboard id="onboarding-2" label="2b · Care recipient (with skip)" width={390} height={844}>
+            <Phone>
+              <OnboardingScreen initialStep={2} onCreate={() => {}} />
+            </Phone>
+          </DCArtboard>
+          <DCArtboard id="dash-fresh" label="3 · Dashboard · Day 1" width={390} height={844}>
+            <DashFresh />
+          </DCArtboard>
+          <DCArtboard id="dash-est" label="4 · Dashboard · Day 14" width={390} height={844}>
+            <DashEstablished />
+          </DCArtboard>
+          <DCArtboard id="dash-reminders" label="5 · Dashboard · reminders" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <RemindersDashboard onAddPerson={() => {}} />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="activity" title="Activity — the shared care log">
+          <DCArtboard id="activity-all" label="Activity · all types" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <ActivityPage initialFilter="all" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="activity-meds" label="Activity · meds only" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <ActivityPage initialFilter="med" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="activity-vitals" label="Activity · vitals only" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <ActivityPage initialFilter="vital" />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="people" title="People — overview + drill-into details">
+          <DCArtboard id="people-arjun" label="People · Arjun (flagged)" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-indira" label="People · Indira (stable)" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={1} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-vitals" label="Detail · Vitals" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} initialView="vitals" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-meds" label="Detail · Medications" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} initialView="meds" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="add-med" label="Add medication" width={390} height={1400}>
+            <IOSDevice width={390} height={1400}>
+              <AddMedicationPage person="Arjun" onBack={() => {}} onSave={() => {}} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="log-reading" label="Log a vital reading" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <LogReadingPage person="Arjun" onBack={() => {}} onSave={() => {}} initialKind="bp" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="add-appt" label="Add appointment" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <AddAppointmentPage person="Arjun" onBack={() => {}} onSave={() => {}} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-appts" label="Detail · Appointments" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} initialView="appts" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-activity" label="Detail · Activity" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} initialView="activity" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="people-team" label="Detail · Care team" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PeoplePage initialIdx={0} initialView="team" />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="docs" title="Documents — auto-segregated by type">
+          <DCArtboard id="docs-rx" label="Documents · Prescriptions" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <DocumentsPage initialTab="rx" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="docs-rep" label="Documents · Reports" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <DocumentsPage initialTab="rep" />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="docs-arjun" label="Documents · Arjun only" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <DocumentsPage initialTab="rep" initialWho="Arjun" />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="owner-caregiver" title="Owner side — manage caregiver network">
+          <DCArtboard id="share" label="Share & Caregivers" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <OwnerCaregiverFlow />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="invite" label="Invite caregiver" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <InviteCaregiver onClose={() => {}} onSend={() => {}} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="feed" label="Activity feed" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <ActivityFeed />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="find-search" label="Find caregiver · search" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <FindCaregiverFlow onBack={() => {}} />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="find-profile" label="Find caregiver · profile" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <FindCaregiverFlow onBack={() => {}} initialProfile={window.caregiverDirectory[0]} />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="caregiver-side" title="Caregiver side — Maya & James">
+          <DCArtboard id="cg-dash" label="Caregiver dashboard · Maya" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <CaregiverFlow />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="cg-shift" label="PSW shift · James" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <PSWShift />
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="cg-note" label="Log visit note · Maya" width={390} height={844}>
+            <IOSDevice width={390} height={844}>
+              <LogVisitNote />
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

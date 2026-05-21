@@ -12,23 +12,69 @@ import { supabase } from '../lib/supabase';
 // ─── Design tokens ─────────────────────────────────────────
 const C = {
   cream: '#F6F1EA', ink: '#1A1F1D', forest: '#1F3D38', forestDeep: '#15302C',
-  terracotta: '#C66E4E', terracottaSoft: '#E9CFC1', sageSoft: '#DDE4D6',
+  terracotta: '#C66E4E', terracottaSoft: '#FBE3D9', terracottaBorder: '#F2C9B8',
+  sageSoft: '#DDE4D6', sage: '#A8B5A0',
   muted: '#6B6862', mutedSoft: '#9A968F', line: '#E8E0D2', lineSoft: '#EFE8DA',
 };
 
 // ─── Icons ──────────────────────────────────────────────────
 function IBell() {
   return (
-    <Svg width={18} height={20} viewBox="0 0 18 20" fill="none">
-      <Path d="M9 1a6 6 0 016 6v4l2 3H1l2-3V7a6 6 0 016-6z" stroke={C.ink} strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M7 17a2 2 0 004 0" stroke={C.ink} strokeWidth={1.5} strokeLinecap="round" />
+    <Svg width={16} height={18} viewBox="0 0 16 18" fill="none">
+      <Path d="M8 1.5v1.5M3 7a5 5 0 1110 0v3l1 2.5H2L3 10V7z" stroke={C.ink} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
 function IShield() {
   return (
-    <Svg width={12} height={13} viewBox="0 0 12 13" fill="none">
+    <Svg width={11} height={13} viewBox="0 0 12 13" fill="none">
       <Path d="M6 1L1 3.5v3C1 9.5 3.5 12 6 13c2.5-1 5-3.5 5-6.5v-3L6 1z" stroke={C.terracotta} strokeWidth={1.3} fill="none" />
+    </Svg>
+  );
+}
+function IWarn() {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 12 12" fill="#fff">
+      <Path d="M6 1l5 10H1L6 1z" />
+    </Svg>
+  );
+}
+function IPill({ color = C.forest }) {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+      <Rect x={1} y={4.5} width={12} height={5} rx={2.5} stroke={color} strokeWidth={1.3} />
+      <Path d="M7 4.5v5" stroke={color} strokeWidth={1.3} />
+    </Svg>
+  );
+}
+function IPulse({ color = C.forest }) {
+  return (
+    <Svg width={14} height={12} viewBox="0 0 14 12" fill="none">
+      <Path d="M1 6h2.5L5 1l3 10 1.5-5H13" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+function INote({ color = C.forest }) {
+  return (
+    <Svg width={13} height={14} viewBox="0 0 13 14" fill="none">
+      <Path d="M1.5 1h7l3.5 3.5V13h-10.5V1z" stroke={color} strokeWidth={1.3} strokeLinejoin="round" />
+      <Path d="M4 7h5M4 10h4" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IClock({ color = C.mutedSoft }) {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+      <Circle cx={6} cy={6} r={5} stroke={color} strokeWidth={1.3} />
+      <Path d="M6 3v3.2L8 7.5" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IPin({ color = C.mutedSoft }) {
+  return (
+    <Svg width={11} height={13} viewBox="0 0 11 13" fill="none">
+      <Path d="M5.5 1a4 4 0 014 4c0 3-4 7-4 7s-4-4-4-7a4 4 0 014-4z" stroke={color} strokeWidth={1.3} />
+      <Circle cx={5.5} cy={5} r={1.5} stroke={color} strokeWidth={1.3} />
     </Svg>
   );
 }
@@ -46,59 +92,12 @@ function IClose({ color = C.muted }) {
     </Svg>
   );
 }
-function IClock() {
+function IDots({ color = C.muted }) {
   return (
-    <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
-      <Circle cx={5.5} cy={5.5} r={4.5} stroke={C.mutedSoft} strokeWidth={1.2} />
-      <Path d="M5.5 3v2.5L7 7" stroke={C.mutedSoft} strokeWidth={1.2} strokeLinecap="round" />
-    </Svg>
-  );
-}
-function IPill({ color = C.forest }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 22 22" fill="none">
-      <Rect x={1} y={7} width={20} height={8} rx={4} stroke={color} strokeWidth={1.8} />
-      <Path d="M11 7v8" stroke={color} strokeWidth={1.8} />
-    </Svg>
-  );
-}
-function ICal({ color = C.forest }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 20 20" fill="none">
-      <Rect x={1} y={3.5} width={18} height={15} rx={2} stroke={color} strokeWidth={1.8} />
-      <Path d="M1 8h18M6 1v3M14 1v3" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  );
-}
-function IPulse({ color = C.forest }) {
-  return (
-    <Svg width={18} height={14} viewBox="0 0 22 20" fill="none">
-      <Path d="M1 10h4l2-7 4 14 3-9 2 3h5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-function INote({ color = C.forest }) {
-  return (
-    <Svg width={16} height={18} viewBox="0 0 18 22" fill="none">
-      <Path d="M2 1h10l5 5v15H2V1z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M12 1v5h5M6 11h6M6 15h4" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-    </Svg>
-  );
-}
-function IDoc({ color = C.forest }) {
-  return (
-    <Svg width={16} height={18} viewBox="0 0 18 22" fill="none">
-      <Path d="M2 1h10l5 5v15H2V1z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M12 1v5h5" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-    </Svg>
-  );
-}
-function IVisit({ color = C.forest }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-      <Path d="M3 2v4a3 3 0 003 3 3 3 0 003-3V2" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
-      <Path d="M6 9v2a3 3 0 003 3h1a3 3 0 003-3v-1" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
-      <Circle cx={13} cy={7} r={1.5} stroke={color} strokeWidth={1.4} />
+    <Svg width={22} height={6} viewBox="0 0 22 6">
+      <Circle cx={3} cy={3} r={2} fill={color} />
+      <Circle cx={11} cy={3} r={2} fill={color} />
+      <Circle cx={19} cy={3} r={2} fill={color} />
     </Svg>
   );
 }
@@ -124,13 +123,28 @@ function daysUntil(iso) {
   const d = new Date(iso); d.setHours(0, 0, 0, 0);
   return Math.round((d - today) / 86400000);
 }
-function apptDay(iso) {
-  const d = daysUntil(iso);
-  if (d === null) return '';
-  if (d === 0) return 'Today';
-  if (d === 1) return 'Tomorrow';
-  if (d < 7) return `In ${d} days`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+// ─── Parse permissions ───────────────────────────────────────
+const PERM_KEYS = ['vitals', 'medications', 'reports', 'profile', 'appointments', 'activity'];
+function parsePerms(raw) {
+  const full = {};
+  PERM_KEYS.forEach(k => { full[k] = { view: true, contribute: true }; });
+  if (!raw) return full;
+  if (Array.isArray(raw)) {
+    const p = {};
+    PERM_KEYS.forEach(k => { p[k] = { view: raw.includes(k), contribute: raw.includes(k) }; });
+    return p;
+  }
+  if (typeof raw === 'object') {
+    const p = {};
+    PERM_KEYS.forEach(k => {
+      const v = raw[k];
+      if (v && typeof v === 'object') p[k] = { view: v.view !== false, contribute: !!v.contribute };
+      else p[k] = { view: v !== false, contribute: v !== false };
+    });
+    return p;
+  }
+  return full;
 }
 
 // ─── Log Modal ──────────────────────────────────────────────
@@ -224,103 +238,257 @@ function LogModal({ slot, onClose, onSave }) {
   );
 }
 
-// ─── Med Row ────────────────────────────────────────────────
-function MedRow({ slot, log, isLast, onPress }) {
-  const status = log?.status ?? 'pending';
-  const done = status === 'taken';
-  const skipped = status === 'skipped';
-  const due = isDue(slot.time);
-  const circleBg = done ? C.forest : 'transparent';
-  const circleBorder = done ? C.forest : skipped ? C.terracotta : due ? C.terracotta : C.line;
+// ─── Person Avatar ───────────────────────────────────────────
+function PersonAvatar({ name, tint, size = 46 }) {
   return (
-    <TouchableOpacity
-      style={[mr.row, !isLast && mr.rowBorder, due && !done && !skipped && { backgroundColor: '#FFF8F2' }]}
-      onPress={onPress} activeOpacity={0.8}
-    >
-      <View style={[mr.circle, { backgroundColor: circleBg, borderColor: circleBorder }]}>
-        {done && <ICheck />}
-        {skipped && <IClose color={C.terracotta} />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[mr.name, (done || skipped) && { color: C.mutedSoft }]}>{slot.name}</Text>
-        {!!slot.dose && <Text style={mr.dose}>{slot.dose}</Text>}
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        {slot.time && <Text style={[mr.time, due && !done && !skipped && { color: C.terracotta, fontWeight: '600' }]}>{fmtTime(slot.time)}</Text>}
-        {done && <Text style={[mr.statusTag, { color: C.forest }]}>Taken</Text>}
-        {skipped && <Text style={[mr.statusTag, { color: C.terracotta }]}>Skipped</Text>}
-        {!done && !skipped && due && <Text style={[mr.statusTag, { color: C.terracotta }]}>Due</Text>}
-      </View>
-    </TouchableOpacity>
+    <View style={{
+      width: size, height: size, borderRadius: 99, flexShrink: 0,
+      backgroundColor: tint, alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ fontFamily: 'Georgia', fontSize: size * 0.38, color: '#fff', fontWeight: '500' }}>
+        {(name || '?')[0].toUpperCase()}
+      </Text>
+    </View>
   );
 }
 
-// ─── Section header ─────────────────────────────────────────
-function SectionHead({ label, action, onAction }) {
+// ─── Sub-section header ──────────────────────────────────────
+function SubHead({ icon: Icon, label, count, color = C.forest }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 22 }}>
-      <Text style={sc.sectionLabel}>{label}</Text>
-      {!!action && (
-        <TouchableOpacity onPress={onAction}>
-          <Text style={sc.sectionAction}>{action}</Text>
-        </TouchableOpacity>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+      <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: C.sageSoft, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon color={color} />
+      </View>
+      <Text style={{ fontSize: 10.5, fontWeight: '700', color: C.forestDeep, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+        {label}
+      </Text>
+      {count != null && (
+        <Text style={{ fontSize: 10.5, color: C.mutedSoft }}>· {count}</Text>
       )}
     </View>
   );
 }
 
-// ─── Quick action tile ──────────────────────────────────────
-function ActionTile({ icon: Icon, label, sub, tint = C.sageSoft, onPress }) {
+// ─── Med Row (visit card) ────────────────────────────────────
+function MedSlotRow({ slot, log, isLast, onPress }) {
+  const status = log?.status ?? 'pending';
+  const done = status === 'taken';
+  const skipped = status === 'skipped';
+  const due = isDue(slot.time);
   return (
-    <TouchableOpacity style={sc.tile} onPress={onPress} activeOpacity={0.8}>
-      <View style={[sc.tileIcon, { backgroundColor: tint }]}>
-        <Icon color={C.forestDeep} />
+    <TouchableOpacity
+      style={[vc.medRow, !isLast && vc.rowBorder, due && !done && !skipped && { backgroundColor: '#FFF8F2' }]}
+      onPress={onPress} activeOpacity={0.8}
+    >
+      <View style={[vc.medCircle, {
+        backgroundColor: done ? C.forest : 'transparent',
+        borderColor: done ? C.forest : skipped ? C.terracotta : due ? C.terracotta : C.line,
+      }]}>
+        {done && <ICheck />}
+        {skipped && <IClose color={C.terracotta} />}
       </View>
-      <Text style={sc.tileLabel}>{label}</Text>
-      <Text style={sc.tileSub}>{sub}</Text>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+          <Text style={[vc.medName, (done || skipped) && { color: C.mutedSoft }]}>{slot.name}</Text>
+          {!!slot.dose && <Text style={vc.medDose}>{slot.dose}</Text>}
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        {slot.time && (
+          <View style={vc.timeTag}>
+            <Text style={vc.timeTagText}>{fmtTime(slot.time)}</Text>
+          </View>
+        )}
+        {done && <Text style={[vc.statusTag, { color: C.forest }]}>Taken</Text>}
+        {skipped && <Text style={[vc.statusTag, { color: C.terracotta }]}>Skipped</Text>}
+        {!done && !skipped && due && <Text style={[vc.statusTag, { color: C.terracotta }]}>Due</Text>}
+      </View>
     </TouchableOpacity>
   );
 }
 
-// ─── Parse permissions ───────────────────────────────────────
-const PERM_KEYS = ['vitals', 'medications', 'reports', 'profile', 'appointments', 'activity'];
+// ─── Visit Card ──────────────────────────────────────────────
+function VisitCard({ person, perms, slots, logMap, appointments, activity, onLogPress, onVisitPress, navigation }) {
+  const isNext = true; // first person is always "next" for simplicity
+  const takenCount = slots.filter(s => logMap[slotKey(s)]?.status === 'taken').length;
+  const pendingMeds = slots.filter(s => !logMap[slotKey(s)]).length;
+  const tint = '#3F5D54';
+  const todayAppts = appointments.filter(a => daysUntil(a.appointment_date) === 0);
+  const allergies = person.allergies ? (typeof person.allergies === 'string' ? person.allergies.split(',').map(s => s.trim()) : person.allergies) : [];
+  const conditions = person.conditions ? (typeof person.conditions === 'string' ? person.conditions.split(',').map(s => s.trim()) : person.conditions) : [];
+  const recentNotes = activity.filter(a => a.activity_type === 'note' || a.activity_type === 'visit_note').slice(0, 2);
 
-function parsePerms(raw) {
-  // Default: full access (so old records without permissions still work)
-  const full = {};
-  PERM_KEYS.forEach(k => { full[k] = { view: true, contribute: true }; });
-  if (!raw) return full;
-  if (Array.isArray(raw)) {
-    const p = {};
-    PERM_KEYS.forEach(k => { p[k] = { view: raw.includes(k), contribute: raw.includes(k) }; });
-    return p;
-  }
-  if (typeof raw === 'object') {
-    const p = {};
-    PERM_KEYS.forEach(k => {
-      const v = raw[k];
-      if (v && typeof v === 'object') p[k] = { view: v.view !== false, contribute: !!v.contribute };
-      else p[k] = { view: v !== false, contribute: v !== false };
-    });
-    return p;
-  }
-  return full;
+  return (
+    <View style={vc.card}>
+      {/* Status ribbon */}
+      <View style={{ height: 5, backgroundColor: isNext ? C.forestDeep : C.lineSoft }} />
+
+      {/* Visit header */}
+      <View style={{ padding: 14, paddingBottom: 0, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <PersonAvatar name={person.name} tint={tint} size={46} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={vc.personName}>{person.name}</Text>
+            {!!person.date_of_birth && (
+              <Text style={vc.personAge}>
+                · {new Date().getFullYear() - new Date(person.date_of_birth).getFullYear()}
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <IClock />
+              <Text style={vc.metaText}>Today's visit</Text>
+            </View>
+            {!!person.address && (
+              <>
+                <Text style={{ color: C.line }}>·</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <IPin />
+                  <Text style={vc.metaText} numberOfLines={1}>
+                    {person.address.split(',')[0] || person.address}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+        <View style={vc.nextBadge}>
+          <Text style={vc.nextBadgeText}>UP NEXT</Text>
+        </View>
+      </View>
+
+      {/* Allergies — always visible, safety-critical */}
+      {allergies.length > 0 && (
+        <View style={{ padding: 14, paddingBottom: 0 }}>
+          <View style={vc.allergyBox}>
+            <View style={vc.allergyIcon}>
+              <IWarn />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={vc.allergyLabel}>ALLERGIES</Text>
+              <Text style={vc.allergyText}>{allergies.join(' · ')}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Conditions chips */}
+      {conditions.length > 0 && (
+        <View style={{ paddingHorizontal: 14, paddingTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+          {conditions.map((c, i) => (
+            <View key={i} style={vc.condChip}>
+              <Text style={vc.condChipText}>{c}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Today appointments */}
+      {perms.appointments?.view && todayAppts.length > 0 && (
+        <View style={{ padding: 14, paddingBottom: 0 }}>
+          <SubHead icon={({ color }) => (
+            <Svg width={13} height={13} viewBox="0 0 13 13" fill="none">
+              <Rect x={0.5} y={2} width={12} height={10} rx={1.5} stroke={color} strokeWidth={1.3} />
+              <Path d="M0.5 5.5h12M4 0.5v2M9 0.5v2" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+            </Svg>
+          )} label="Today's appointments" count={todayAppts.length} />
+          <View style={vc.innerCard}>
+            {todayAppts.map((a, i) => (
+              <View key={a.id} style={[{ padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }, i < todayAppts.length - 1 && vc.rowBorder]}>
+                <View style={[vc.apptDot, { backgroundColor: C.terracottaSoft }]}>
+                  <Text style={{ fontSize: 11 }}>📅</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '500', color: C.ink }}>{a.title || 'Appointment'}</Text>
+                  <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                    {a.time ? fmtTime(a.time) : 'Today'}
+                    {a.location ? ` · ${a.location}` : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Medications */}
+      {perms.medications?.view && (
+        <View style={{ padding: 14, paddingBottom: 0 }}>
+          <SubHead
+            icon={IPill}
+            label="Medications"
+            count={slots.length > 0 ? `${takenCount}/${slots.length} given` : undefined}
+          />
+          {slots.length === 0 ? (
+            <View style={[vc.innerCard, { padding: 12 }]}>
+              <Text style={{ fontSize: 12, color: C.mutedSoft, textAlign: 'center' }}>No medications on schedule</Text>
+            </View>
+          ) : (
+            <View style={vc.innerCard}>
+              {slots.map((slot, i) => (
+                <MedSlotRow
+                  key={slot.id}
+                  slot={slot}
+                  log={logMap[slotKey(slot)]}
+                  isLast={i === slots.length - 1}
+                  onPress={() => {
+                    if (!perms.medications.contribute) return;
+                    const s = logMap[slotKey(slot)]?.status;
+                    if (s === 'taken' || s === 'skipped') return;
+                    onLogPress(slot);
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Notes from family */}
+      {recentNotes.length > 0 && (
+        <View style={{ padding: 14, paddingBottom: 0 }}>
+          <SubHead icon={INote} label="Notes from family" count={recentNotes.length} />
+          {recentNotes.map((n, i) => (
+            <View key={n.id || i} style={vc.noteRow}>
+              <Text style={vc.noteFrom}>{n.actor_name || 'Family'}</Text>
+              <Text style={vc.noteBody} numberOfLines={3}>{n.note || n.title || ''}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* CTA buttons */}
+      <View style={{ padding: 14, flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity
+          style={[vc.ctaBtn, { backgroundColor: C.forestDeep, flex: 1 }]}
+          onPress={onVisitPress}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Start visit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={vc.dotsBtn} activeOpacity={0.8}>
+          <IDots />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 // ─── Main screen ────────────────────────────────────────────
 export default function CaregiverTodayScreen({ navigation }) {
-  const [profile, setProfile]         = useState(null);
-  const [persons, setPersons]         = useState([]);
-  const [activeIdx, setActiveIdx]     = useState(0);
-  const [permMap, setPermMap]         = useState({}); // person_id → parsed perms
-  const [meds, setMeds]               = useState([]);
-  const [schedules, setSchedules]     = useState([]);
+  const [profile, setProfile]           = useState(null);
+  const [persons, setPersons]           = useState([]);
+  const [activeIdx, setActiveIdx]       = useState(0);
+  const [permMap, setPermMap]           = useState({});
+  const [meds, setMeds]                 = useState([]);
+  const [schedules, setSchedules]       = useState([]);
   const [appointments, setAppointments] = useState([]);
-  const [activity, setActivity]       = useState([]);
-  const [logMap, setLogMap]           = useState({});
-  const [logTarget, setLogTarget]     = useState(null);
+  const [activity, setActivity]         = useState([]);
+  const [logMap, setLogMap]             = useState({});
+  const [logTarget, setLogTarget]       = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading]           = useState(true);
 
   // ── Load assigned persons ──────────────────────────────
   const loadPersons = useCallback(async () => {
@@ -349,20 +517,18 @@ export default function CaregiverTodayScreen({ navigation }) {
       });
       personIds = [...new Set(personIds)];
 
-      // Fallback: accepted caregiver_requests
-      if (!personIds.length) {
-        const [{ data: byId }, { data: byEmail }] = await Promise.all([
-          supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_id', user.id).eq('status', 'accepted'),
-          supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_email', userEmail).eq('status', 'accepted'),
-        ]);
-        [...(byId || []), ...(byEmail || [])].forEach(r => {
-          if (r.person_id && !pm[r.person_id]) {
-            personIds.push(r.person_id);
-            pm[r.person_id] = parsePerms(r.permissions);
-          }
-        });
-        personIds = [...new Set(personIds)];
-      }
+      // Fallback: accepted caregiver_requests (when caregiver_relationships insert failed or not yet created)
+      const [{ data: byId }, { data: byEmail }] = await Promise.all([
+        supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_id', user.id).eq('status', 'accepted'),
+        supabase.from('caregiver_requests').select('person_id, permissions').eq('caregiver_email', userEmail).eq('status', 'accepted'),
+      ]);
+      [...(byId || []), ...(byEmail || [])].forEach(r => {
+        if (r.person_id && !pm[r.person_id]) {
+          personIds.push(r.person_id);
+          pm[r.person_id] = parsePerms(r.permissions);
+        }
+      });
+      personIds = [...new Set(personIds)];
 
       setPermMap(pm);
 
@@ -373,7 +539,7 @@ export default function CaregiverTodayScreen({ navigation }) {
         setPersons([]);
       }
 
-      // Badge
+      // Badge count
       const [{ count: c1 }, { count: c2 }] = await Promise.all([
         supabase.from('caregiver_requests').select('id', { count: 'exact', head: true }).eq('caregiver_id', user.id).eq('status', 'pending'),
         supabase.from('caregiver_requests').select('id', { count: 'exact', head: true }).eq('caregiver_email', userEmail).eq('status', 'pending'),
@@ -425,8 +591,7 @@ export default function CaregiverTodayScreen({ navigation }) {
   }
   slots.sort((a, b) => (!a.time ? 1 : !b.time ? -1 : a.time.localeCompare(b.time)));
 
-  const takenCount   = slots.filter(s => logMap[slotKey(s)]?.status === 'taken').length;
-  const pendingMeds  = slots.filter(s => !logMap[slotKey(s)]).length;
+  const takenCount = slots.filter(s => logMap[slotKey(s)]?.status === 'taken').length;
 
   // ── Log handler ────────────────────────────────────────
   const handleLog = async (status, note) => {
@@ -449,28 +614,32 @@ export default function CaregiverTodayScreen({ navigation }) {
     } catch (_) {}
   };
 
-  const person     = persons[activeIdx];
-  const perms      = person ? (permMap[person.id] || parsePerms(null)) : parsePerms(null);
-  const dateStr    = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const name       = profile?.full_name?.split(' ')[0] || 'there';
-  const todayAppts = appointments.filter(a => daysUntil(a.appointment_date) === 0);
-  const upcomingAppts = appointments.filter(a => { const d = daysUntil(a.appointment_date); return d !== null && d > 0; }).slice(0, 2);
+  const person  = persons[activeIdx];
+  const perms   = person ? (permMap[person.id] || parsePerms(null)) : parsePerms(null);
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const name    = profile?.full_name?.split(' ')[0] || 'there';
 
   return (
     <SafeAreaView style={sc.container} edges={['top']}>
+      {/* Mode strip */}
       <View style={sc.modeStrip} />
 
-      {/* ── Top bar ── */}
+      {/* Top bar */}
       <View style={sc.topBar}>
         <View>
           <View style={sc.modeTag}>
             <IShield />
-            <Text style={sc.modeTagText}>CAREGIVER MODE</Text>
+            <Text style={sc.modeTagText}>CAREGIVER PORTAL</Text>
           </View>
-          <Text style={sc.greeting}>Today, {name}</Text>
-          <Text style={sc.dateStr}>{dateStr}</Text>
+          <Text style={sc.greeting}>Hello, {name}</Text>
+          <Text style={sc.dateStr}>
+            {dateStr} · {persons.length} {persons.length === 1 ? 'visit' : 'visits'} scheduled
+          </Text>
         </View>
-        <TouchableOpacity style={sc.bellBtn} onPress={() => navigation.navigate('CaregiverNotifications')}>
+        <TouchableOpacity
+          style={sc.bellBtn}
+          onPress={() => navigation.navigate('CaregiverNotifications')}
+        >
           <IBell />
           {pendingCount > 0 && (
             <View style={sc.badge}>
@@ -484,8 +653,17 @@ export default function CaregiverTodayScreen({ navigation }) {
         <ActivityIndicator color={C.forest} style={{ marginTop: 40 }} />
       ) : persons.length === 0 ? (
         <View style={sc.emptyWrap}>
-          <Text style={sc.emptyTitle}>No people assigned yet</Text>
-          <Text style={sc.emptySub}>When a family accepts your request, their loved one will appear here.</Text>
+          <Text style={sc.emptyTitle}>No visits today</Text>
+          <Text style={sc.emptySub}>
+            When a family assigns you to a person, they'll appear here.{'\n'}
+            Check Notifications for any pending requests.
+          </Text>
+          <TouchableOpacity
+            style={sc.emptyBtn}
+            onPress={() => navigation.navigate('CaregiverNotifications')}
+          >
+            <Text style={sc.emptyBtnText}>View notifications</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
@@ -493,17 +671,24 @@ export default function CaregiverTodayScreen({ navigation }) {
           contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Person chips ── */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 0 }}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4, gap: 8, flexDirection: 'row' }}>
+          {/* Person chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flexShrink: 0 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4, gap: 8, flexDirection: 'row' }}
+          >
             {persons.map((p, i) => {
               const active = i === activeIdx;
               const tint = i % 2 === 0 ? '#3F5D54' : '#C66E4E';
               return (
-                <TouchableOpacity key={p.id} onPress={() => setActiveIdx(i)}
-                  style={[sc.chip, active && sc.chipActive]}>
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => setActiveIdx(i)}
+                  style={[sc.chip, active && sc.chipActive]}
+                >
                   <View style={[sc.chipInit, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : tint }]}>
-                    <Text style={sc.chipInitText}>{(p.name || '?')[0]}</Text>
+                    <Text style={sc.chipInitText}>{(p.name || '?')[0].toUpperCase()}</Text>
                   </View>
                   <Text style={[sc.chipName, active && { color: '#fff' }]}>{p.name}</Text>
                 </TouchableOpacity>
@@ -511,168 +696,62 @@ export default function CaregiverTodayScreen({ navigation }) {
             })}
           </ScrollView>
 
+          {/* Next visit summary strip */}
           {person && (
-            <View style={{ paddingHorizontal: 20 }}>
-
-              {/* ── Person header card ── */}
-              <View style={sc.personCard}>
-                <View style={sc.personAvatar}>
-                  <Text style={sc.personAvatarText}>{(person.name || '?')[0]}</Text>
+            <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+              <View style={sc.summaryCard}>
+                <View style={[sc.summaryIcon]}>
+                  <IClock color={C.forest} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={sc.personRel}>{(person.relationship || 'Person').toUpperCase()}</Text>
-                  <Text style={sc.personName}>{person.name}</Text>
-                  {!!person.date_of_birth && (
-                    <Text style={sc.personSub}>
-                      DOB: {person.date_of_birth}
-                      {person.sex ? ` · ${person.sex}` : ''}
-                      {person.weight_kg ? ` · ${person.weight_kg}kg` : ''}
-                    </Text>
-                  )}
+                  <Text style={sc.summaryText}>
+                    Current visit · <Text style={{ color: C.ink, fontWeight: '600' }}>{person.name}</Text>
+                  </Text>
+                  <Text style={sc.summarySub}>
+                    {slots.length > 0
+                      ? `${takenCount} of ${slots.length} meds given`
+                      : 'No medications on schedule'}
+                  </Text>
                 </View>
                 <TouchableOpacity
-                  style={sc.profileBtn}
+                  style={sc.startBtn}
                   onPress={() => navigation.navigate('CaregiverVisit', { personId: person.id, personName: person.name })}
                 >
-                  <Text style={sc.profileBtnText}>Visit</Text>
+                  <Text style={sc.startBtnText}>Start</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* ── Quick actions (permission-gated) ── */}
-              <SectionHead label="QUICK ACTIONS" />
-              <View style={sc.tileGrid}>
-                <ActionTile icon={IVisit} label="Visit" sub="Start session" tint={C.sageSoft}
-                  onPress={() => navigation.navigate('CaregiverVisit', { personId: person.id, personName: person.name })} />
-                {perms.vitals?.view && (
-                  <ActionTile icon={IPulse} label="Vitals"
-                    sub={perms.vitals.contribute ? 'Log reading' : 'View only'}
-                    tint="#EBF0E8"
-                    onPress={() => perms.vitals.contribute
-                      ? navigation.navigate('CaregiverVitalsLog', { personId: person.id })
-                      : navigation.navigate('VitalsHistory', { personId: person.id, personName: person.name })} />
-                )}
-                {perms.activity?.contribute && (
-                  <ActionTile icon={INote} label="Note" sub="Add visit note" tint={C.terracottaSoft}
-                    onPress={() => navigation.navigate('CaregiverVisitNote', { personId: person.id })} />
-                )}
-                {perms.medications?.view && (
-                  <ActionTile icon={IPill} label="Meds" sub="Full schedule" tint="#EBF0E8"
-                    onPress={() => navigation.navigate('Medications', { personId: person.id })} />
-                )}
-                {perms.reports?.view && (
-                  <ActionTile icon={IDoc} label="Reports"
-                    sub={perms.reports.contribute ? 'View & upload' : 'View only'}
-                    tint="#FBF5E8"
-                    onPress={() => navigation.navigate('DocsHome', { personId: person.id })} />
-                )}
-                {perms.appointments?.view && (
-                  <ActionTile icon={ICal} label="Appts" sub="Calendar" tint={C.sageSoft}
-                    onPress={() => navigation.navigate('AppointmentsScreen', { personId: person.id, personName: person.name })} />
-                )}
-              </View>
-
-              {/* ── Today's appointments ── */}
-              {perms.appointments?.view && (todayAppts.length > 0 || upcomingAppts.length > 0) && (
-                <>
-                  <SectionHead label="APPOINTMENTS" action="All"
-                    onAction={() => navigation.navigate('AppointmentsScreen', { personId: person.id, personName: person.name })} />
-                  <View style={sc.card}>
-                    {[...todayAppts, ...upcomingAppts].map((a, i, arr) => (
-                      <View key={a.id} style={[sc.apptRow, i < arr.length - 1 && sc.rowBorder]}>
-                        <View style={[sc.apptDot, daysUntil(a.appointment_date) === 0 && { backgroundColor: C.terracottaSoft }]}>
-                          <ICal color={daysUntil(a.appointment_date) === 0 ? C.terracotta : C.forest} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={sc.apptTitle}>{a.title || 'Appointment'}</Text>
-                          <Text style={sc.apptMeta}>
-                            {apptDay(a.appointment_date)}
-                            {a.time ? ` · ${fmtTime(a.time)}` : ''}
-                            {a.location ? ` · ${a.location}` : ''}
-                          </Text>
-                        </View>
-                        {daysUntil(a.appointment_date) === 0 && (
-                          <View style={sc.todayTag}><Text style={sc.todayTagText}>TODAY</Text></View>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {/* ── Today's medications ── */}
-              {perms.medications?.view && (
-                <>
-                  <SectionHead
-                    label={`MEDICATIONS TODAY${slots.length > 0 ? ` · ${takenCount}/${slots.length}` : ''}`}
-                    action={slots.length > 0 ? 'All meds' : undefined}
-                    onAction={() => navigation.navigate('Medications', { personId: person.id })}
-                  />
-                  {slots.length === 0 ? (
-                    <View style={sc.emptyCard}>
-                      <Text style={sc.emptyCardText}>No medications on schedule</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={sc.progressWrap}>
-                        <View style={sc.progressBg}>
-                          <View style={[sc.progressFill, { width: `${(takenCount / slots.length) * 100}%` }]} />
-                        </View>
-                        <Text style={sc.progressLabel}>{takenCount} taken · {pendingMeds} pending</Text>
-                      </View>
-                      <View style={sc.card}>
-                        {slots.map((slot, i) => (
-                          <MedRow
-                            key={slot.id}
-                            slot={slot}
-                            log={logMap[slotKey(slot)]}
-                            isLast={i === slots.length - 1}
-                            onPress={() => {
-                              if (!perms.medications.contribute) return;
-                              const s = logMap[slotKey(slot)]?.status;
-                              if (s === 'taken' || s === 'skipped') return;
-                              setLogTarget(slot);
-                            }}
-                          />
-                        ))}
-                      </View>
-                      {!perms.medications.contribute && (
-                        <Text style={sc.readOnlyNote}>Read only · You can view but not log medications</Text>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* ── Recent activity ── */}
-              {perms.activity?.view && activity.length > 0 && (
-                <>
-                  <SectionHead label="RECENT ACTIVITY" />
-                  <View style={sc.card}>
-                    {activity.map((item, i) => (
-                      <View key={item.id || i} style={[sc.actRow, i < activity.length - 1 && sc.rowBorder]}>
-                        <View style={[sc.actDot, item.flagged && { backgroundColor: '#FBE3D9' }]}>
-                          <Text style={{ fontSize: 13 }}>
-                            {item.activity_type === 'medication' ? '💊'
-                              : item.activity_type === 'vital' ? '📊'
-                              : item.activity_type === 'appointment' ? '📅'
-                              : item.activity_type === 'document' ? '📄' : '📝'}
-                          </Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={sc.actTitle}>{item.title || item.activity_type}</Text>
-                          {!!item.note && <Text style={sc.actNote} numberOfLines={1}>{item.note}</Text>}
-                        </View>
-                        <Text style={sc.actTime}>
-                          {item.created_at ? new Date(item.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              )}
-
             </View>
           )}
+
+          {/* Visit cards */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+            {persons.map((p, i) => {
+              const pPerms = permMap[p.id] || parsePerms(null);
+              const isActive = i === activeIdx;
+              const pSlots = isActive ? slots : [];
+              const pLogMap = isActive ? logMap : {};
+              const pAppts = isActive ? appointments : [];
+              const pActivity = isActive ? activity : [];
+              return (
+                <VisitCard
+                  key={p.id}
+                  person={p}
+                  perms={pPerms}
+                  slots={pSlots}
+                  logMap={pLogMap}
+                  appointments={pAppts}
+                  activity={pActivity}
+                  onLogPress={(slot) => { setActiveIdx(i); setLogTarget(slot); }}
+                  onVisitPress={() => navigation.navigate('CaregiverVisit', { personId: p.id, personName: p.name })}
+                  navigation={navigation}
+                />
+              );
+            })}
+
+            <Text style={sc.footNote}>
+              Allergies, conditions and notes are shared by the family. Tap Start visit to begin.
+            </Text>
+          </View>
         </ScrollView>
       )}
 
@@ -689,90 +768,76 @@ export default function CaregiverTodayScreen({ navigation }) {
   );
 }
 
-// ─── Styles ─────────────────────────────────────────────────
+// ─── Screen styles ───────────────────────────────────────────
 const sc = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: C.cream },
-  modeStrip:      { height: 4, backgroundColor: C.terracotta, opacity: 0.85 },
-  topBar:         { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  modeTag:        { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  modeTagText:    { fontSize: 10, color: C.terracotta, letterSpacing: 0.7, fontWeight: '700' },
-  greeting:       { fontFamily: 'Georgia', fontSize: 24, color: C.forestDeep, fontWeight: '400', marginTop: 4, letterSpacing: -0.4 },
-  dateStr:        { fontSize: 12, color: C.muted, marginTop: 2 },
-  bellBtn:        { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  badge:          { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.terracotta, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText:      { fontSize: 9, color: '#fff', fontWeight: '700' },
+  container:    { flex: 1, backgroundColor: C.cream },
+  modeStrip:    { height: 4, backgroundColor: C.terracotta, opacity: 0.85 },
+  topBar:       { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  modeTag:      { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  modeTagText:  { fontSize: 10, color: C.terracotta, letterSpacing: 0.7, fontWeight: '700' },
+  greeting:     { fontFamily: 'Georgia', fontSize: 26, color: C.forestDeep, fontWeight: '400', marginTop: 4, letterSpacing: -0.5 },
+  dateStr:      { fontSize: 12.5, color: C.muted, marginTop: 4 },
+  bellBtn:      { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  badge:        { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.terracotta, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText:    { fontSize: 9, color: '#fff', fontWeight: '700' },
 
-  // Empty state
-  emptyWrap:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyTitle:     { fontFamily: 'Georgia', fontSize: 17, color: C.forestDeep, fontWeight: '500', textAlign: 'center' },
-  emptySub:       { marginTop: 8, fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 19 },
+  emptyWrap:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyTitle:   { fontFamily: 'Georgia', fontSize: 20, color: C.forestDeep, fontWeight: '500', textAlign: 'center' },
+  emptySub:     { marginTop: 8, fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20 },
+  emptyBtn:     { marginTop: 20, height: 44, paddingHorizontal: 22, borderRadius: 14, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center' },
+  emptyBtnText: { color: '#fff', fontSize: 13.5, fontWeight: '600' },
 
-  // Person chips
-  chip:           { height: 36, paddingHorizontal: 12, paddingLeft: 4, borderRadius: 99, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chipActive:     { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
-  chipInit:       { width: 27, height: 27, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
-  chipInitText:   { color: '#fff', fontFamily: 'Georgia', fontSize: 11, fontWeight: '500' },
-  chipName:       { fontSize: 13, fontWeight: '500', color: C.ink },
+  chip:         { height: 36, paddingHorizontal: 12, paddingLeft: 4, borderRadius: 99, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chipActive:   { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
+  chipInit:     { width: 27, height: 27, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  chipInitText: { color: '#fff', fontFamily: 'Georgia', fontSize: 11, fontWeight: '500' },
+  chipName:     { fontSize: 13, fontWeight: '500', color: C.ink },
 
-  // Person header card
-  personCard:     { backgroundColor: C.forestDeep, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4 },
-  personAvatar:   { width: 50, height: 50, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  personAvatarText: { color: '#fff', fontFamily: 'Georgia', fontSize: 20, fontWeight: '500' },
-  personRel:      { fontSize: 9.5, color: 'rgba(255,255,255,0.6)', letterSpacing: 0.5 },
-  personName:     { fontFamily: 'Georgia', fontSize: 18, color: '#fff', fontWeight: '400', marginTop: 1 },
-  personSub:      { fontSize: 10.5, color: 'rgba(255,255,255,0.55)', marginTop: 3 },
-  profileBtn:     { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  profileBtnText: { fontSize: 12.5, color: '#fff', fontWeight: '600' },
+  summaryCard:  { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  summaryIcon:  { width: 30, height: 30, borderRadius: 9, backgroundColor: C.sageSoft, alignItems: 'center', justifyContent: 'center' },
+  summaryText:  { fontSize: 12, color: C.muted, lineHeight: 15 },
+  summarySub:   { fontSize: 10.5, color: C.mutedSoft, marginTop: 1 },
+  startBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 99, backgroundColor: C.forestDeep },
+  startBtnText: { color: '#fff', fontSize: 11.5, fontWeight: '600' },
 
-  // Sections
-  sectionLabel:   { fontSize: 10, fontWeight: '700', color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase' },
-  sectionAction:  { fontSize: 12, color: C.forest, fontWeight: '600' },
-
-  // Quick action tiles
-  tileGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile:           { width: '31%', backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 13, minHeight: 90 },
-  tileIcon:       { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  tileLabel:      { fontSize: 13, fontWeight: '600', color: C.ink },
-  tileSub:        { fontSize: 10, color: C.muted, marginTop: 2 },
-
-  // Card container
-  card:           { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
-  rowBorder:      { borderBottomWidth: 1, borderBottomColor: C.lineSoft },
-  emptyCard:      { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 20, alignItems: 'center' },
-  emptyCardText:  { fontSize: 13, color: C.mutedSoft },
-
-  // Appointments
-  apptRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  apptDot:        { width: 36, height: 36, borderRadius: 10, backgroundColor: C.sageSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  apptTitle:      { fontSize: 13.5, fontWeight: '500', color: C.ink },
-  apptMeta:       { fontSize: 11, color: C.muted, marginTop: 2 },
-  todayTag:       { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: C.terracottaSoft },
-  todayTagText:   { fontSize: 9, fontWeight: '700', color: C.terracotta, letterSpacing: 0.4 },
-
-  // Medication progress
-  progressWrap:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  progressBg:     { flex: 1, height: 5, borderRadius: 99, backgroundColor: C.line, overflow: 'hidden' },
-  progressFill:   { height: 5, borderRadius: 99, backgroundColor: C.forest },
-  progressLabel:  { fontSize: 11, color: C.muted, flexShrink: 0 },
-
-  readOnlyNote:   { fontSize: 11, color: C.mutedSoft, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
-  // Activity
-  actRow:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14 },
-  actDot:         { width: 32, height: 32, borderRadius: 9, backgroundColor: C.sageSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  actTitle:       { fontSize: 13, fontWeight: '500', color: C.ink },
-  actNote:        { fontSize: 11, color: C.muted, marginTop: 1 },
-  actTime:        { fontSize: 10.5, color: C.mutedSoft, flexShrink: 0 },
+  footNote:     { marginTop: 14, paddingHorizontal: 4, fontSize: 11, color: C.mutedSoft, lineHeight: 16 },
 });
 
-// ─── Med row styles ──────────────────────────────────────────
-const mr = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, paddingHorizontal: 16 },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.lineSoft },
-  circle:   { width: 28, height: 28, borderRadius: 99, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  name:     { fontSize: 13.5, fontWeight: '500', color: C.ink },
-  dose:     { fontSize: 11, color: C.muted, marginTop: 1 },
-  time:     { fontSize: 11.5, color: C.muted },
-  statusTag: { fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.3 },
+// ─── Visit card styles ───────────────────────────────────────
+const vc = StyleSheet.create({
+  card:          { backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: C.line, marginBottom: 14, overflow: 'hidden' },
+  personName:    { fontFamily: 'Georgia', fontSize: 19, color: C.forestDeep, fontWeight: '500', letterSpacing: -0.3 },
+  personAge:     { fontSize: 11.5, color: C.muted },
+  metaText:      { fontSize: 11.5, color: C.muted },
+  nextBadge:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, backgroundColor: C.terracottaSoft },
+  nextBadgeText: { fontSize: 9.5, fontWeight: '700', color: '#7A3F2A', letterSpacing: 0.4 },
+
+  allergyBox:    { backgroundColor: C.terracottaSoft, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderColor: C.terracottaBorder },
+  allergyIcon:   { width: 24, height: 24, borderRadius: 7, backgroundColor: C.terracotta, alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 },
+  allergyLabel:  { fontSize: 9.5, color: '#7A3F2A', letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: '700' },
+  allergyText:   { fontSize: 13, color: '#5C2A1F', fontWeight: '600', marginTop: 2, lineHeight: 17, letterSpacing: -0.1 },
+
+  condChip:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: C.cream, borderWidth: 1, borderColor: C.lineSoft },
+  condChipText:  { fontSize: 10.5, color: C.muted, fontWeight: '500' },
+
+  innerCard:     { backgroundColor: C.cream, borderRadius: 12, overflow: 'hidden' },
+  apptDot:       { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rowBorder:     { borderBottomWidth: 1, borderBottomColor: C.lineSoft },
+
+  medRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 9 },
+  medCircle:     { width: 22, height: 22, borderRadius: 99, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  medName:       { fontSize: 13, fontWeight: '600', color: C.ink, letterSpacing: -0.1 },
+  medDose:       { fontSize: 11, color: C.muted },
+  timeTag:       { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, backgroundColor: '#fff', borderWidth: 1, borderColor: C.lineSoft },
+  timeTagText:   { fontFamily: 'Georgia', fontSize: 10, color: C.muted, letterSpacing: 0.2 },
+  statusTag:     { fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.3 },
+
+  noteRow:       { backgroundColor: '#FBF7F1', borderLeftWidth: 2.5, borderLeftColor: C.forest, borderRadius: 4, borderTopRightRadius: 11, borderBottomRightRadius: 11, padding: 9, paddingLeft: 11, marginBottom: 6 },
+  noteFrom:      { fontSize: 11.5, fontWeight: '600', color: C.forestDeep },
+  noteBody:      { fontSize: 12.5, color: C.ink, lineHeight: 17, marginTop: 3 },
+
+  ctaBtn:        { height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dotsBtn:       { width: 42, height: 42, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
 });
 
 // ─── Log modal styles ────────────────────────────────────────

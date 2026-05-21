@@ -51,6 +51,7 @@ import CaregiverVisitNoteScreen from '../screens/CaregiverVisitNoteScreen';
 import CaregiverMedConfirmScreen from '../screens/CaregiverMedConfirmScreen';
 import CaregiverVitalsLogScreen from '../screens/CaregiverVitalsLogScreen';
 import CaregiverNotificationsScreen from '../screens/CaregiverNotificationsScreen';
+import OwnerNotificationsScreen from '../screens/OwnerNotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -102,6 +103,7 @@ function OwnerStack({ initialRoute }) {
       <Stack.Screen name="InviteCaregiver" component={InviteCaregiverScreen} />
       <Stack.Screen name="FindCaregiver" component={FindCaregiverScreen} />
       <Stack.Screen name="CaregiverPublicProfile" component={CaregiverPublicProfileScreen} />
+      <Stack.Screen name="OwnerNotifications" component={OwnerNotificationsScreen} />
     </Stack.Navigator>
   );
 }

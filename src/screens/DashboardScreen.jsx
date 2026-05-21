@@ -432,6 +432,15 @@ export default function DashboardScreen({ navigation }) {
       setProfile(p);
       const { data: pp } = await supabase.from('persons').select('*').eq('user_id', user.id).order('created_at');
       setPersons(pp || []);
+      // Backfill owner_name on old caregiver_requests that are missing it
+      const ownerName = p?.full_name || '';
+      if (ownerName) {
+        supabase
+          .from('caregiver_requests')
+          .update({ owner_name: ownerName })
+          .eq('owner_id', user.id)
+          .then(() => {}).catch(() => {});
+      }
     } catch (e) {
       console.error('[Dashboard] loadData:', e);
     } finally {
@@ -622,7 +631,7 @@ export default function DashboardScreen({ navigation }) {
           <Text style={st.dateStr}>{dateStr}</Text>
           <Text style={st.greeting}>{greeting}</Text>
         </View>
-        <TouchableOpacity style={st.bellPill}>
+        <TouchableOpacity style={st.bellPill} onPress={() => navigation.navigate('OwnerNotifications')}>
           <IconBell />
           {dueCount > 0 && <View style={st.bellDot} />}
         </TouchableOpacity>

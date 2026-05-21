@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Polygon } from 'react-native-svg';
 import { colors } from '../theme';
 import { IconPlus } from '../components/Icons';
 import TabBar from '../components/TabBar';
@@ -18,15 +18,65 @@ const C = {
   line: '#E8E0D2', lineSoft: '#EFE8DA', sageSoft: '#DDE4D6',
 };
 
+// ── Section SVG icons ─────────────────────────────────────────────────────────
+
+function IVitals() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+function IMeds() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Path d="M4.5 12.5L12 5a5 5 0 017 7l-7.5 7.5a5 5 0 01-7-7z" stroke={C.forest} strokeWidth={1.8} strokeLinejoin="round" />
+      <Path d="M9 9l6 6" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IDocs() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke={C.forest} strokeWidth={1.8} strokeLinejoin="round" />
+      <Path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IProfile() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="8" r="4" stroke={C.forest} strokeWidth={1.8} />
+      <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function ICalendar() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="4" width="18" height="18" rx="2" stroke={C.forest} strokeWidth={1.8} />
+      <Path d="M16 2v4M8 2v4M3 10h18" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IClock() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="9" stroke={C.forest} strokeWidth={1.8} />
+      <Path d="M12 7v5l3 3" stroke={C.forest} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 // ── Permission sections ───────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { key: 'vitals',       label: 'Vitals',                  desc: 'Blood pressure, sugar, weight…', emoji: '📊' },
-  { key: 'medications',  label: 'Medications',              desc: 'Current meds & schedules',       emoji: '💊' },
-  { key: 'reports',      label: 'Reports & prescriptions',  desc: 'Documents & lab results',        emoji: '📄' },
-  { key: 'profile',      label: 'Profile information',      desc: 'Conditions, allergies, info',    emoji: '👤' },
-  { key: 'appointments', label: 'Appointments',             desc: 'Upcoming & past visits',         emoji: '📅' },
-  { key: 'activity',     label: 'Activity history',         desc: 'Daily logs & notes',             emoji: '🕐' },
+  { key: 'vitals',       label: 'Vitals',                  desc: 'Blood pressure, sugar, weight…', Icon: IVitals },
+  { key: 'medications',  label: 'Medications',              desc: 'Current meds & schedules',       Icon: IMeds },
+  { key: 'reports',      label: 'Reports & prescriptions',  desc: 'Documents & lab results',        Icon: IDocs },
+  { key: 'profile',      label: 'Profile information',      desc: 'Conditions, allergies, info',    Icon: IProfile },
+  { key: 'appointments', label: 'Appointments',             desc: 'Upcoming & past visits',         Icon: ICalendar },
+  { key: 'activity',     label: 'Activity history',         desc: 'Daily logs & notes',             Icon: IClock },
 ];
 
 function defaultPerms() {
@@ -202,13 +252,13 @@ function EditSheet({ visible, rel, persons, onClose, onSave }) {
             <Text style={sh.colLabel}>Contribute</Text>
           </View>
 
-          {SECTIONS.map(({ key, label, desc, emoji }) => {
+          {SECTIONS.map(({ key, label, desc, Icon }) => {
             const p = perms[key];
             return (
               <View key={key} style={sh.row}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                    <Text style={{ fontSize: 15 }}>{emoji}</Text>
+                    <Icon />
                     <Text style={sh.rowLabel}>{label}</Text>
                   </View>
                   <Text style={sh.rowDesc}>{desc}</Text>
@@ -269,18 +319,48 @@ export default function CareScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Backfill owner_name on any old requests that are missing it.
+      // The owner can always read their own profile and update their own rows.
       try {
-        const { data: reqs } = await supabase
-          .from('caregiver_requests')
-          .select('id, caregiver_id, caregiver_email, person_id, role, permissions')
-          .eq('owner_id', user.id)
-          .eq('status', 'accepted');
+        const { data: ownerProfile } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+        const ownerName = ownerProfile?.full_name || '';
+        if (ownerName) {
+          await supabase
+            .from('caregiver_requests')
+            .update({ owner_name: ownerName })
+            .eq('owner_id', user.id);
+        }
+      } catch (_) {}
+
+      try {
+        const [{ data: reqs }, { data: relRows }] = await Promise.all([
+          supabase
+            .from('caregiver_requests')
+            .select('id, caregiver_id, caregiver_email, person_id, role, permissions')
+            .eq('owner_id', user.id)
+            .eq('status', 'accepted'),
+          // Owner always has RLS access to their caregiver_relationships rows
+          supabase
+            .from('caregiver_relationships')
+            .select('caregiver_id, caregiver_name, caregiver_email')
+            .eq('profile_owner_id', user.id),
+        ]);
+
+        // Names from caregiver_relationships (most reliable — stored when caregiver accepts)
+        const cgRelNameMap = {};
+        (relRows || []).forEach(r => {
+          if (r.caregiver_id && r.caregiver_name) cgRelNameMap[r.caregiver_id] = r.caregiver_name;
+        });
+
+        // Names from profiles as secondary source (works when profiles RLS allows read)
         const cgIds = (reqs || []).map(r => r.caregiver_id).filter(Boolean);
         let nameMap = {};
         if (cgIds.length) {
           const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', cgIds);
-          (profs || []).forEach(p => { nameMap[p.id] = p.full_name || ''; });
+          (profs || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
         }
+
         const seen = new Set();
         const deduped = (reqs || []).filter(r => {
           const key = r.caregiver_id || r.caregiver_email;
@@ -288,7 +368,8 @@ export default function CareScreen({ navigation }) {
           seen.add(key); return true;
         });
         setCaregivers(deduped.map(r => ({
-          ...r, _name: nameMap[r.caregiver_id] || r.caregiver_email || 'Caregiver',
+          ...r,
+          _name: cgRelNameMap[r.caregiver_id] || nameMap[r.caregiver_id] || r.caregiver_email || 'Caregiver',
         })));
       } catch (_) { setCaregivers([]); }
 
@@ -316,21 +397,68 @@ export default function CareScreen({ navigation }) {
       if (error) throw error;
 
       // 2. Write to caregiver_relationships so the caregiver portal can read it.
-      //    Try update first; if no row exists yet, insert.
-      if (rel.caregiver_id && personId) {
+      // If caregiver_id is still null, resolve via find_user_by_email RPC (queries
+      // auth.users directly — no role filter, most reliable).
+      let effectiveCgId = rel.caregiver_id;
+      if (!effectiveCgId && rel.caregiver_email) {
+        // Best: find_user_by_email queries auth.users — no profiles/role dependency
+        try {
+          const { data: uid } = await supabase
+            .rpc('find_user_by_email', { p_email: rel.caregiver_email.trim().toLowerCase() });
+          effectiveCgId = uid || null;
+        } catch (_) {}
+
+        // Fallback 1: search_caregiver_by_email (needs role='caregiver' in profiles)
+        if (!effectiveCgId) {
+          try {
+            const { data: found } = await supabase
+              .rpc('search_caregiver_by_email', { p_email: rel.caregiver_email });
+            effectiveCgId = found?.[0]?.id || null;
+          } catch (_) {}
+        }
+
+        // Fallback 2: direct profiles lookup (works if RLS allows)
+        if (!effectiveCgId) {
+          try {
+            const { data: cp } = await supabase
+              .from('profiles').select('id').eq('email', rel.caregiver_email).maybeSingle();
+            effectiveCgId = cp?.id || null;
+          } catch (_) {}
+        }
+
+        if (effectiveCgId) {
+          await supabase.from('caregiver_requests')
+            .update({ caregiver_id: effectiveCgId })
+            .eq('id', rel.id)
+            .catch(() => {});
+        }
+      }
+
+      if (!effectiveCgId) {
+        Alert.alert(
+          'Caregiver not found',
+          `Could not link ${rel.caregiver_email || 'this caregiver'} — they may not have created an account yet. Permissions were saved; the connection will activate when they sign up.`
+        );
+        setEditSheet(null);
+        load();
+        return;
+      }
+
+      if (effectiveCgId && personId) {
         const { data: updated } = await supabase
           .from('caregiver_relationships')
           .update({ person_id: personId, permissions: perms, access_revoked: false })
           .eq('profile_owner_id', user.id)
-          .eq('caregiver_id', rel.caregiver_id)
+          .eq('caregiver_id', effectiveCgId)
           .select('id');
 
         if (!updated || updated.length === 0) {
           await supabase.from('caregiver_relationships').insert({
-            caregiver_id: rel.caregiver_id,
+            caregiver_id: effectiveCgId,
             profile_owner_id: user.id,
             person_id: personId,
             role: rel.role || 'caregiver',
+            caregiver_name: rel._name || '',
             caregiver_email: rel.caregiver_email || null,
             permissions: perms,
             access_revoked: false,
