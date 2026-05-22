@@ -489,6 +489,7 @@ export default function CaregiverTodayScreen({ navigation }) {
   const [logTarget, setLogTarget]       = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading]           = useState(true);
+  const activePersonIdRef               = useRef(null);
 
   // ── Load assigned persons ──────────────────────────────
   const loadPersons = useCallback(async () => {
@@ -554,10 +555,18 @@ export default function CaregiverTodayScreen({ navigation }) {
   // ── Load per-person data when active person changes ────
   useEffect(() => {
     const person = persons[activeIdx];
-    if (!person) { setMeds([]); setSchedules([]); setAppointments([]); setActivity([]); setLogMap({}); return; }
+    if (!person) {
+      setMeds([]); setSchedules([]); setAppointments([]); setActivity([]); setLogMap({});
+      activePersonIdRef.current = null;
+      return;
+    }
+
+    const personChanged = activePersonIdRef.current !== person.id;
+    activePersonIdRef.current = person.id;
+
     (async () => {
       const today = todayStr();
-      await Promise.allSettled([
+      const queries = [
         supabase.from('medications').select('*').eq('person_id', person.id).eq('active', true)
           .then(({ data }) => setMeds(data || [])),
         supabase.from('medication_schedules').select('medication_name, times, frequency_type, food_instruction').eq('person_id', person.id).eq('active', true)
@@ -566,13 +575,35 @@ export default function CaregiverTodayScreen({ navigation }) {
           .then(({ data }) => setAppointments(data || [])),
         supabase.from('activity_log').select('*').eq('person_id', person.id).order('created_at', { ascending: false }).limit(8)
           .then(({ data }) => setActivity(data || [])),
-        supabase.from('medication_logs').select('*').eq('person_id', person.id).eq('log_date', today)
-          .then(({ data }) => {
-            const map = {};
-            for (const l of data ?? []) map[`${l.medication_name}_${l.scheduled_time ?? 'anytime'}`] = { status: l.status, note: l.note ?? '' };
-            setLogMap(map);
-          }),
-      ]);
+      ];
+
+      // Only reload logMap when switching to a different person.
+      // Reads from activity_log — no constraint issues, already has correct RLS.
+      if (personChanged) {
+        queries.push(
+          supabase
+            .from('activity_log')
+            .select('payload')
+            .eq('person_id', person.id)
+            .eq('action_type', 'medication')
+            .gte('created_at', today + 'T00:00:00Z')
+            .lte('created_at', today + 'T23:59:59Z')
+            .then(({ data }) => {
+              const map = {};
+              for (const row of data ?? []) {
+                const p = row.payload || {};
+                if (p.log_date === today && p.medication_name) {
+                  const k = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
+                  // Keep most recent status if same med logged twice
+                  map[k] = { status: p.status, note: p.note ?? '' };
+                }
+              }
+              setLogMap(map);
+            })
+        );
+      }
+
+      await Promise.allSettled(queries);
     })();
   }, [persons, activeIdx]);
 
@@ -593,25 +624,43 @@ export default function CaregiverTodayScreen({ navigation }) {
 
   const takenCount = slots.filter(s => logMap[slotKey(s)]?.status === 'taken').length;
 
-  // ── Log handler ────────────────────────────────────────
+  // ── Log handler — writes to activity_log (no constraint issues) ──────
   const handleLog = async (status, note) => {
     if (!logTarget || !persons[activeIdx]) return;
-    const key = slotKey(logTarget);
+    const key      = slotKey(logTarget);
+    const personId = persons[activeIdx].id;
+    const target   = { ...logTarget };
+
+    // Optimistic update first so UI feels instant
     setLogMap(prev => ({ ...prev, [key]: { status, note } }));
     setLogTarget(null);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('medication_logs').upsert({
-        person_id: persons[activeIdx].id,
-        medication_name: logTarget.name,
-        scheduled_time: logTarget.time ?? null,
-        log_date: todayStr(),
-        status,
-        note: note || null,
-        logged_by: user?.id,
-        logged_at: new Date().toISOString(),
-      }, { onConflict: 'person_id,medication_name,log_date,scheduled_time' });
-    } catch (_) {}
+      const cgName = profile?.full_name || '';
+
+      const { error } = await supabase.from('activity_log').insert({
+        actor_id:    user.id,
+        actor_name:  cgName,
+        action_type: 'medication',
+        person_id:   personId,
+        payload: {
+          medication_name: target.name,
+          scheduled_time:  target.time || null,
+          log_date:        todayStr(),
+          status,
+          note:            note || null,
+        },
+      });
+
+      if (error) {
+        setLogMap(prev => { const n = { ...prev }; delete n[key]; return n; });
+        console.error('activity_log save failed:', error.message);
+      }
+    } catch (e) {
+      setLogMap(prev => { const n = { ...prev }; delete n[key]; return n; });
+      console.error('activity_log save error:', e.message || e);
+    }
   };
 
   const person  = persons[activeIdx];

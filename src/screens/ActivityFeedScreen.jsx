@@ -394,7 +394,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
 
       {/* ── Person chips ── */}
       {persons.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 0 }} contentContainerStyle={st.personRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 0, flexGrow: 0 }} contentContainerStyle={st.personRow}>
           {persons.map((p, i) => {
             const isActive = i === activeIdx;
             const tint = i % 2 === 0 ? '#3F5D54' : '#C66E4E';
@@ -426,7 +426,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ flexShrink: 0 }}
+        style={{ flexShrink: 0, flexGrow: 0 }}
         contentContainerStyle={st.filterRow}
       >
         {FILTER_TABS.map(tab => {
@@ -541,7 +541,7 @@ const st = StyleSheet.create({
   heroSub: { marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 18 },
 
   // Person chips
-  personRow: { paddingHorizontal: 20, paddingTop: 12, gap: 8, flexDirection: 'row' },
+  personRow: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4, gap: 8, flexDirection: 'row' },
   personChip: {
     height: 40, paddingHorizontal: 14, paddingLeft: 4, borderRadius: 99,
     borderWidth: 1, borderColor: C.line, backgroundColor: '#fff',
