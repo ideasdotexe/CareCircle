@@ -249,8 +249,12 @@ const cc = StyleSheet.create({
 });
 
 // ─── Main screen ──────────────────────────────────────────
-export default function DocsHomeScreen({ navigation }) {
-  const [persons, setPersons] = useState([]);
+export default function DocsHomeScreen({ navigation, route }) {
+  // Caregiver mode: person passed as route param — skip owner persons query
+  const passedPerson = route?.params?.person ?? null;
+  const isCaregiver = !!passedPerson;
+
+  const [persons, setPersons] = useState(passedPerson ? [passedPerson] : []);
   const [activeIdx, setActiveIdx] = useState(0);
   const [tab, setTab] = useState('reports'); // 'reports' | 'prescriptions'
   const [reports, setReports] = useState([]);
@@ -260,21 +264,28 @@ export default function DocsHomeScreen({ navigation }) {
   const load = useCallback(async (personOverride) => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      let target;
 
-      const { data: personsData } = await supabase
-        .from('persons')
-        .select('id, name, relationship')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
+      if (isCaregiver) {
+        // Caregiver: person already known, no owner persons query needed
+        target = personOverride ?? passedPerson;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setLoading(false); return; }
 
-      if (!personsData?.length) { setLoading(false); return; }
-      setPersons(personsData);
+        const { data: personsData } = await supabase
+          .from('persons')
+          .select('id, name, relationship')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
 
-      const target = personOverride ?? personsData[activeIdx] ?? personsData[0];
-      const idx = personsData.findIndex(p => p.id === target.id);
-      if (idx >= 0) setActiveIdx(idx);
+        if (!personsData?.length) { setLoading(false); return; }
+        setPersons(personsData);
+
+        target = personOverride ?? personsData[activeIdx] ?? personsData[0];
+        const idx = personsData.findIndex(p => p.id === target.id);
+        if (idx >= 0) setActiveIdx(idx);
+      }
 
       const { data: labData } = await supabase
         .from('lab_results')
@@ -285,7 +296,7 @@ export default function DocsHomeScreen({ navigation }) {
       setReports(labData ?? []);
     } catch (_) {}
     setLoading(false);
-  }, [activeIdx]);
+  }, [activeIdx, isCaregiver]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -332,18 +343,22 @@ export default function DocsHomeScreen({ navigation }) {
         <TouchableOpacity style={st.iconBtn} onPress={() => navigation.goBack()}>
           <IBack />
         </TouchableOpacity>
-        <Text style={st.topTitle}>Documents</Text>
-        <TouchableOpacity
-          style={st.scanBtn}
-          onPress={() => navigation.navigate('DocumentUpload', { person: activePerson })}
-        >
-          <IScan />
-          <Text style={st.scanText}>Scan</Text>
-        </TouchableOpacity>
+        <Text style={st.topTitle}>Health Records</Text>
+        {!isCaregiver ? (
+          <TouchableOpacity
+            style={st.scanBtn}
+            onPress={() => navigation.navigate('DocumentUpload', { person: activePerson })}
+          >
+            <IScan />
+            <Text style={st.scanText}>Scan</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
       </View>
 
       {/* ── Hero ── */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 14, paddingBottom: 4 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 2 }}>
         <Text style={st.hero}>
           {activePerson?.name
             ? `${activePerson.name}'s\nrecords.`
@@ -352,12 +367,12 @@ export default function DocsHomeScreen({ navigation }) {
         <Text style={st.heroSub}>Prescriptions, lab reports and imaging — all in one place.</Text>
       </View>
 
-      {/* ── Person chips ── */}
-      {persons.length > 1 && (
+      {/* ── Person chips (owner only) ── */}
+      {!isCaregiver && persons.length > 1 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ flexShrink: 0 }}
+          style={{ flexShrink: 0, flexGrow: 0 }}
           contentContainerStyle={st.personRow}
         >
           {persons.map((p, i) => {
@@ -480,7 +495,7 @@ export default function DocsHomeScreen({ navigation }) {
         </ScrollView>
       )}
 
-      <TabBar active={2} navigation={navigation} params={activePerson ? { person: activePerson } : undefined} />
+      {!isCaregiver && <TabBar active={2} navigation={navigation} params={activePerson ? { person: activePerson } : undefined} />}
     </SafeAreaView>
   );
 }
@@ -507,7 +522,7 @@ const st = StyleSheet.create({
   hero: { fontFamily: 'Georgia', fontSize: 27, lineHeight: 32, color: C.forestDeep, fontWeight: '400', letterSpacing: -0.6 },
   heroSub: { marginTop: 6, fontSize: 13, color: C.muted, lineHeight: 18 },
 
-  personRow: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2, gap: 8 },
+  personRow: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4, gap: 8 },
   personChip: {
     height: 36, paddingHorizontal: 12, paddingLeft: 4, borderRadius: 99,
     borderWidth: 1, borderColor: C.line, backgroundColor: '#fff',
@@ -519,7 +534,7 @@ const st = StyleSheet.create({
   personChipName: { fontSize: 12.5, fontWeight: '500', color: C.ink },
 
   tabRow: {
-    flexDirection: 'row', marginHorizontal: 20, marginTop: 16,
+    flexDirection: 'row', marginHorizontal: 20, marginTop: 10,
     backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.line,
     padding: 3,
   },

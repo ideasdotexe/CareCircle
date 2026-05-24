@@ -98,7 +98,8 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
   const [c, setC] = useState(passedCaregiver || null);
   const [loading, setLoading] = useState(!passedCaregiver);
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  // 'idle' | 'pending' | 'connected'
+  const [requestState, setRequestState] = useState('idle');
 
   useEffect(() => {
     if (!passedCaregiver && id) {
@@ -112,48 +113,85 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
     }
   }, [id, passedCaregiver]);
 
+  // Check if a request/relationship already exists for this caregiver
+  useEffect(() => {
+    const caregiverId = passedCaregiver?.id || id;
+    if (!caregiverId || !(passedCaregiver?._isReal)) return;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Check relationships first (accepted = fully connected)
+        const { data: rel } = await supabase
+          .from('caregiver_relationships')
+          .select('id')
+          .eq('profile_owner_id', user.id)
+          .eq('caregiver_id', caregiverId)
+          .neq('access_revoked', true)
+          .maybeSingle();
+        if (rel) { setRequestState('connected'); return; }
+
+        // Check pending request
+        const { data: req } = await supabase
+          .from('caregiver_requests')
+          .select('id, status')
+          .eq('owner_id', user.id)
+          .eq('caregiver_id', caregiverId)
+          .in('status', ['pending', 'accepted'])
+          .maybeSingle();
+        if (req) {
+          setRequestState(req.status === 'accepted' ? 'connected' : 'pending');
+        }
+      } catch (_) {}
+    })();
+  }, [passedCaregiver, id]);
+
   const sendRequest = async () => {
     if (!c._isReal) {
       // Mock profile — simulate
       setSending(true);
-      setTimeout(() => { setSending(false); setSent(true); }, 800);
+      setTimeout(() => { setSending(false); setRequestState('pending'); }, 800);
       return;
     }
     setSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Get sender's name for the notification
+      // Get sender's name — try profiles table first, fall back to auth metadata, then email prefix
       const { data: senderProfile } = await supabase
         .from('profiles')
         .select('full_name')
         .eq('id', user.id)
         .maybeSingle();
-      const senderName = senderProfile?.full_name || 'Someone';
+      const senderName =
+        senderProfile?.full_name ||
+        user.user_metadata?.full_name ||
+        user.email?.split('@')[0] ||
+        'Someone';
 
       // Insert care request
       const { error: reqErr } = await supabase.from('caregiver_requests').insert({
         owner_id: user.id,
+        owner_name: senderName,
         caregiver_id: c.id,
         status: 'pending',
       });
       if (reqErr) throw reqErr;
 
-      // Notify the caregiver (best-effort — table may not exist yet)
+      // Notify the caregiver (best-effort)
       try {
         await supabase.from('notifications').insert({
-          user_id: c.id,          // recipient = the caregiver
+          user_id: c.id,
           type: 'care_request',
           title: 'New care request',
           body: `${senderName} has sent you a care request.`,
-          data: { owner_id: user.id },
+          data: { owner_id: user.id, owner_name: senderName },
           read: false,
         });
-      } catch (_) {
-        // Notifications table may not exist — ignore silently
-      }
+      } catch (_) {}
 
-      setSent(true);
+      setRequestState('pending');
     } catch (e) {
       Alert.alert('Could not send', e.message || String(e));
     } finally {
@@ -317,14 +355,25 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
             </Svg>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={sendRequest}
-            disabled={sent || sending}
-            style={[st.sendBtn, sent && { backgroundColor: C.sage }]}
-            activeOpacity={0.85}
+            onPress={requestState === 'idle' ? sendRequest : undefined}
+            disabled={requestState !== 'idle' || sending}
+            style={[
+              st.sendBtn,
+              requestState === 'pending' && { backgroundColor: '#9A968F' },
+              requestState === 'connected' && { backgroundColor: '#A8B5A0' },
+            ]}
+            activeOpacity={requestState === 'idle' ? 0.85 : 1}
           >
             {sending ? (
               <ActivityIndicator color="#fff" />
-            ) : sent ? (
+            ) : requestState === 'connected' ? (
+              <>
+                <Svg width={14} height={11} viewBox="0 0 14 11">
+                  <Path d="M1 6L5 10L13 1" stroke="#fff" strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={st.sendBtnText}>Already connected</Text>
+              </>
+            ) : requestState === 'pending' ? (
               <>
                 <Svg width={14} height={11} viewBox="0 0 14 11">
                   <Path d="M1 6L5 10L13 1" stroke="#fff" strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -341,14 +390,19 @@ export default function CaregiverPublicProfileScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
         </View>
-        {!sent && (
+        {requestState === 'idle' && (
           <Text style={st.footerNote}>
             {firstName} sees your name and the role you'd like to fill. No data is shared until they accept.
           </Text>
         )}
-        {sent && (
+        {requestState === 'pending' && (
           <Text style={st.footerNote}>
             You'll be notified when {firstName} responds. Usually within 24 hours.
+          </Text>
+        )}
+        {requestState === 'connected' && (
+          <Text style={st.footerNote}>
+            {firstName} is already part of your care team. Manage them from the Care tab.
           </Text>
         )}
       </View>

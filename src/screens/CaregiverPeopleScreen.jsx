@@ -640,9 +640,9 @@ export default function CaregiverPeopleScreen({ navigation }) {
                 {perms.reports?.view && (
                   <QuickTile
                     icon={IDoc}
-                    label="Documents"
+                    label="Health Records"
                     sub={perms.reports.contribute ? 'View & upload' : 'View only'}
-                    onPress={() => navigation.navigate('DocsHome', { personId: active.id })}
+                    onPress={() => navigation.navigate('DocsHome', { person: active })}
                   />
                 )}
                 {perms.activity?.view && (
@@ -759,7 +759,7 @@ export default function CaregiverPeopleScreen({ navigation }) {
         </ScrollView>
       )}
 
-      <CaregiverTabBar active={1} navigation={navigation} />
+      <CaregiverTabBar active={-1} navigation={navigation} />
     </SafeAreaView>
   );
 }

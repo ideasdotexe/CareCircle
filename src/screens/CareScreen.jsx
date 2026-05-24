@@ -73,7 +73,7 @@ function IClock() {
 const SECTIONS = [
   { key: 'vitals',       label: 'Vitals',                  desc: 'Blood pressure, sugar, weight…', Icon: IVitals },
   { key: 'medications',  label: 'Medications',              desc: 'Current meds & schedules',       Icon: IMeds },
-  { key: 'reports',      label: 'Reports & prescriptions',  desc: 'Documents & lab results',        Icon: IDocs },
+  { key: 'reports',      label: 'Health Records',            desc: 'Lab results & prescriptions',    Icon: IDocs },
   { key: 'profile',      label: 'Profile information',      desc: 'Conditions, allergies, info',    Icon: IProfile },
   { key: 'appointments', label: 'Appointments',             desc: 'Upcoming & past visits',         Icon: ICalendar },
   { key: 'activity',     label: 'Activity history',         desc: 'Daily logs & notes',             Icon: IClock },
@@ -319,58 +319,46 @@ export default function CareScreen({ navigation }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Backfill owner_name on any old requests that are missing it.
-      // The owner can always read their own profile and update their own rows.
       try {
-        const { data: ownerProfile } = await supabase
-          .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-        const ownerName = ownerProfile?.full_name || '';
-        if (ownerName) {
-          await supabase
-            .from('caregiver_requests')
-            .update({ owner_name: ownerName })
-            .eq('owner_id', user.id);
-        }
-      } catch (_) {}
+        // Primary: caregiver_relationships — owner always has RLS access to their own rows.
+        // Caregivers appear here once they accept (person_id may be null until owner assigns).
+        const { data: relRows } = await supabase
+          .from('caregiver_relationships')
+          .select('id, caregiver_id, caregiver_name, caregiver_email, person_id, role, permissions, access_revoked')
+          .eq('profile_owner_id', user.id)
+          .neq('access_revoked', true);
 
-      try {
-        const [{ data: reqs }, { data: relRows }] = await Promise.all([
-          supabase
-            .from('caregiver_requests')
-            .select('id, caregiver_id, caregiver_email, person_id, role, permissions')
-            .eq('owner_id', user.id)
-            .eq('status', 'accepted'),
-          // Owner always has RLS access to their caregiver_relationships rows
-          supabase
-            .from('caregiver_relationships')
-            .select('caregiver_id, caregiver_name, caregiver_email')
-            .eq('profile_owner_id', user.id),
-        ]);
+        // Secondary: accepted requests with no relationship row yet (edge case / migration 021 not run)
+        const { data: acceptedReqs } = await supabase
+          .from('caregiver_requests')
+          .select('id, caregiver_id, caregiver_email, person_id, role, permissions')
+          .eq('owner_id', user.id)
+          .eq('status', 'accepted');
 
-        // Names from caregiver_relationships (most reliable — stored when caregiver accepts)
-        const cgRelNameMap = {};
-        (relRows || []).forEach(r => {
-          if (r.caregiver_id && r.caregiver_name) cgRelNameMap[r.caregiver_id] = r.caregiver_name;
-        });
+        const relCgIds = new Set((relRows || []).map(r => r.caregiver_id).filter(Boolean));
 
-        // Names from profiles as secondary source (works when profiles RLS allows read)
-        const cgIds = (reqs || []).map(r => r.caregiver_id).filter(Boolean);
-        let nameMap = {};
-        if (cgIds.length) {
-          const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', cgIds);
-          (profs || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
-        }
-
+        // Merge: relationships first, then any accepted requests not already covered
         const seen = new Set();
-        const deduped = (reqs || []).filter(r => {
+        const merged = [];
+
+        (relRows || []).forEach(r => {
           const key = r.caregiver_id || r.caregiver_email;
-          if (!key || seen.has(key)) return false;
-          seen.add(key); return true;
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          merged.push({
+            ...r,
+            _name: r.caregiver_name || r.caregiver_email || 'Caregiver',
+          });
         });
-        setCaregivers(deduped.map(r => ({
-          ...r,
-          _name: cgRelNameMap[r.caregiver_id] || nameMap[r.caregiver_id] || r.caregiver_email || 'Caregiver',
-        })));
+
+        (acceptedReqs || []).forEach(r => {
+          const key = r.caregiver_id || r.caregiver_email;
+          if (!key || seen.has(key) || relCgIds.has(r.caregiver_id)) return;
+          seen.add(key);
+          merged.push({ ...r, _name: r.caregiver_email || 'Caregiver' });
+        });
+
+        setCaregivers(merged);
       } catch (_) { setCaregivers([]); }
 
       try {
@@ -387,89 +375,74 @@ export default function CareScreen({ navigation }) {
   const handleSave = async (rel, personId, perms) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-
-      // 1. Update caregiver_requests (owner always has access to their own rows)
-      const { error } = await supabase
-        .from('caregiver_requests')
-        .update({ person_id: personId || null, permissions: perms })
-        .eq('id', rel.id)
-        .eq('owner_id', user.id);
-      if (error) throw error;
-
-      // 2. Write to caregiver_relationships so the caregiver portal can read it.
-      // If caregiver_id is still null, resolve via find_user_by_email RPC (queries
-      // auth.users directly — no role filter, most reliable).
-      let effectiveCgId = rel.caregiver_id;
-      if (!effectiveCgId && rel.caregiver_email) {
-        // Best: find_user_by_email queries auth.users — no profiles/role dependency
-        try {
-          const { data: uid } = await supabase
-            .rpc('find_user_by_email', { p_email: rel.caregiver_email.trim().toLowerCase() });
-          effectiveCgId = uid || null;
-        } catch (_) {}
-
-        // Fallback 1: search_caregiver_by_email (needs role='caregiver' in profiles)
-        if (!effectiveCgId) {
-          try {
-            const { data: found } = await supabase
-              .rpc('search_caregiver_by_email', { p_email: rel.caregiver_email });
-            effectiveCgId = found?.[0]?.id || null;
-          } catch (_) {}
-        }
-
-        // Fallback 2: direct profiles lookup (works if RLS allows)
-        if (!effectiveCgId) {
-          try {
-            const { data: cp } = await supabase
-              .from('profiles').select('id').eq('email', rel.caregiver_email).maybeSingle();
-            effectiveCgId = cp?.id || null;
-          } catch (_) {}
-        }
-
-        if (effectiveCgId) {
-          await supabase.from('caregiver_requests')
-            .update({ caregiver_id: effectiveCgId })
-            .eq('id', rel.id)
-            .catch(() => {});
-        }
-      }
+      const effectiveCgId = rel.caregiver_id;
 
       if (!effectiveCgId) {
-        Alert.alert(
-          'Caregiver not found',
-          `Could not link ${rel.caregiver_email || 'this caregiver'} — they may not have created an account yet. Permissions were saved; the connection will activate when they sign up.`
-        );
+        Alert.alert('Caregiver not found', 'This caregiver has not signed up yet. They will appear once they create an account.');
         setEditSheet(null);
-        load();
         return;
       }
 
-      if (effectiveCgId && personId) {
-        const { data: updated } = await supabase
-          .from('caregiver_relationships')
-          .update({ person_id: personId, permissions: perms, access_revoked: false })
-          .eq('profile_owner_id', user.id)
-          .eq('caregiver_id', effectiveCgId)
-          .select('id');
+      // Try UPDATE first (row may already exist)
+      const { data: updated, error: updateErr } = await supabase
+        .from('caregiver_relationships')
+        .update({ person_id: personId || null, permissions: perms, access_revoked: false })
+        .eq('profile_owner_id', user.id)
+        .eq('caregiver_id', effectiveCgId)
+        .select('id');
 
-        if (!updated || updated.length === 0) {
-          await supabase.from('caregiver_relationships').insert({
-            caregiver_id: effectiveCgId,
-            profile_owner_id: user.id,
-            person_id: personId,
-            role: rel.role || 'caregiver',
-            caregiver_name: rel._name || '',
-            caregiver_email: rel.caregiver_email || null,
-            permissions: perms,
-            access_revoked: false,
-          });
+      if (updateErr) {
+        // If column doesn't allow null, retry without setting person_id to null
+        if (updateErr.message?.includes('null value') || updateErr.message?.includes('not-null')) {
+          if (!personId) {
+            Alert.alert('Select a person', 'Please select who this caregiver will care for before saving.');
+            return;
+          }
+        }
+        throw new Error(updateErr.message);
+      }
+
+      if (!updated || updated.length === 0) {
+        // No existing row — insert a new one
+        const insertPayload = {
+          caregiver_id: effectiveCgId,
+          profile_owner_id: user.id,
+          role: rel.role || 'caregiver',
+          caregiver_name: rel._name || rel.caregiver_name || '',
+          caregiver_email: rel.caregiver_email || null,
+          permissions: perms,
+          access_revoked: false,
+        };
+        // Only include person_id if we have one (guards against NOT NULL constraint
+        // when migration 023 hasn't been run yet)
+        if (personId) insertPayload.person_id = personId;
+
+        const { error: insertErr } = await supabase
+          .from('caregiver_relationships')
+          .insert(insertPayload);
+
+        if (insertErr) {
+          if (insertErr.message?.includes('null value') || insertErr.message?.includes('not-null')) {
+            Alert.alert('Select a person', 'Please select who this caregiver will care for before saving.');
+            return;
+          }
+          throw new Error(insertErr.message);
         }
       }
+
+      // Keep caregiver_requests in sync (best-effort, ignore errors)
+      supabase
+        .from('caregiver_requests')
+        .update({ person_id: personId || null, permissions: perms })
+        .eq('owner_id', user.id)
+        .eq('caregiver_id', effectiveCgId)
+        .eq('status', 'accepted')
+        .then(() => {});
 
       setEditSheet(null);
       load();
     } catch (e) {
-      Alert.alert('Error', e.message || 'Could not save.');
+      Alert.alert('Could not save', e.message || 'An unexpected error occurred. Please try again.');
     }
   };
 

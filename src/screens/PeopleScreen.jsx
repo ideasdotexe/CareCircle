@@ -539,8 +539,8 @@ export default function PeopleScreen({ navigation }) {
                 icon={IconCal}
               />
               <QuickTile
-                label="Documents"
-                sub="Filed records"
+                label="Health Records"
+                sub="Lab results & prescriptions"
                 onPress={() => navigation.navigate('DocsHome', { personId: active.id })}
                 icon={IconDoc}
               />

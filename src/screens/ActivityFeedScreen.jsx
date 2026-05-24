@@ -94,7 +94,7 @@ const TYPE_META = {
   medication: { label: 'Meds',         Icon: IPill },
   vital:      { label: 'Vitals',       Icon: IPulse },
   note:       { label: 'Notes',        Icon: INote },
-  doc:        { label: 'Documents',    Icon: IDoc },
+  doc:        { label: 'Health Records', Icon: IDoc },
   appt:       { label: 'Appointments', Icon: IAppt },
 };
 
@@ -103,7 +103,7 @@ const FILTER_TABS = [
   { k: 'med',   label: 'Meds',         Icon: IPill },
   { k: 'vital', label: 'Vitals',       Icon: IPulse },
   { k: 'note',  label: 'Notes',        Icon: INote },
-  { k: 'doc',   label: 'Documents',    Icon: IDoc },
+  { k: 'doc',   label: 'Health Records', Icon: IDoc },
   { k: 'appt',  label: 'Appointments', Icon: IAppt },
 ];
 
@@ -312,17 +312,34 @@ function ActivityRow({ item, isLast }) {
   );
 }
 
+// Normalize an activity_log row so medication entries have top-level title/status/note
+function normalizeRow(row) {
+  if (row.action_type === 'medication' && row.payload) {
+    const p = row.payload;
+    return {
+      ...row,
+      activity_type: 'medication',
+      title: p.medication_name || row.title || 'Medication',
+      status: p.status || row.status || null,
+      note: p.note || row.note || null,
+    };
+  }
+  return row;
+}
+
 // ─── Main screen ──────────────────────────────────────────
 export default function ActivityFeedScreen({ navigation, route }) {
-  const personId = route?.params?.personId;
-  const [persons, setPersons] = useState([]);
+  const passedPerson = route?.params?.person;
+  const personId = passedPerson?.id || route?.params?.personId;
+  const [persons, setPersons] = useState(passedPerson ? [passedPerson] : []);
   const [activeIdx, setActiveIdx] = useState(0);
   const [filter, setFilter] = useState('all');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load persons once
+  // Load persons once — skip owner query when a specific person is passed (caregiver mode)
   useEffect(() => {
+    if (passedPerson) return; // already set above
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -349,7 +366,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
         .eq('person_id', active.id)
         .order('created_at', { ascending: false })
         .limit(150);
-      setItems(data || []);
+      setItems((data || []).map(normalizeRow));
     } catch (_) { setItems([]); }
     finally { setLoading(false); }
   }, [persons, activeIdx]);
@@ -363,7 +380,7 @@ export default function ActivityFeedScreen({ navigation, route }) {
   const filtered = filter === 'all'
     ? items
     : items.filter(it => {
-        const kind = (it.activity_type || it.type || '').toLowerCase();
+        const kind = (it.activity_type || it.action_type || it.type || '').toLowerCase();
         if (filter === 'med') return kind === 'med' || kind === 'medication';
         return kind === filter;
       });

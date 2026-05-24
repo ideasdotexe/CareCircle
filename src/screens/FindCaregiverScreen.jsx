@@ -78,14 +78,31 @@ function VerifiedTag() {
   );
 }
 
-export function SearchResultCard({ c, onPress }) {
+export function SearchResultCard({ c, onPress, connectionStatus }) {
+  const isConnected = connectionStatus === 'connected';
+  const isPending = connectionStatus === 'pending';
+
   return (
-    <TouchableOpacity style={sh.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[sh.card, isConnected && { opacity: 0.7 }]}
+      onPress={isConnected ? undefined : onPress}
+      activeOpacity={isConnected ? 1 : 0.8}
+    >
       <PhotoTile tones={c.photoTone} initials={c.initials} size={54} radius={14} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Text style={sh.cardName}>{c.name}</Text>
           {c.verified && <VerifiedTag />}
+          {isConnected && (
+            <View style={sh.connectedTag}>
+              <Text style={sh.connectedTagText}>Connected</Text>
+            </View>
+          )}
+          {isPending && (
+            <View style={sh.pendingTag}>
+              <Text style={sh.pendingTagText}>Requested</Text>
+            </View>
+          )}
         </View>
         <Text style={sh.cardMeta}>
           {c.yearsExp > 0 ? `${c.yearsExp} yrs experience` : 'Caregiver'}
@@ -98,22 +115,22 @@ export function SearchResultCard({ c, onPress }) {
           <Text style={sh.cardLoc}>{c.region ? `${c.region}, ` : ''}{c.city}{c.province ? ` · ${c.province}` : ''}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
-          {c.rating > 0 && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Stars rating={c.rating} />
-              <Text style={sh.ratingNum}>{c.rating.toFixed(1)}</Text>
-              {c.reviewCount > 0 && <Text style={sh.ratingCount}>({c.reviewCount})</Text>}
-            </View>
-          )}
-          {c.rating > 0 && !!c.rate && <Text style={{ color: C.line }}>·</Text>}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Stars rating={c.rating || 0} />
+            <Text style={sh.ratingNum}>{(c.rating || 0).toFixed(1)}</Text>
+            <Text style={sh.ratingCount}>({c.reviewCount || 0})</Text>
+          </View>
+          {!!c.rate && <Text style={{ color: C.line }}>·</Text>}
           {!!c.rate && <Text style={sh.rate}>{c.rate}</Text>}
         </View>
       </View>
-      <View style={{ alignSelf: 'center' }}>
-        <Svg width={7} height={12} viewBox="0 0 7 12" fill="none">
-          <Path d="M1 1l5 5-5 5" stroke={C.mutedSoft} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      </View>
+      {!isConnected && (
+        <View style={{ alignSelf: 'center' }}>
+          <Svg width={7} height={12} viewBox="0 0 7 12" fill="none">
+            <Path d="M1 1l5 5-5 5" stroke={C.mutedSoft} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -123,50 +140,60 @@ export default function FindCaregiverScreen({ navigation }) {
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('All');
   const [supabaseCaregivers, setSupabaseCaregivers] = useState([]);
+  // caregiverId → 'pending' | 'connected'
+  const [statusMap, setStatusMap] = useState({});
 
   useEffect(() => {
     (async () => {
       let fromProfiles = [];
 
       try {
-        // 1. caregiver_profiles is the source of truth for professional details
-        const { data: cpRows } = await supabase
-          .from('caregiver_profiles')
-          .select('*');
+        // search_caregivers('') is SECURITY DEFINER — bypasses RLS and returns
+        // full_name + all profile fields in one call, no cross-table join needed.
+        const { data: rpcRows } = await supabase.rpc('search_caregivers', { p_query: '' });
 
-        if (!cpRows?.length) {
-          // Fallback: try profiles table directly
-          const { data: pRows } = await supabase
-            .from('profiles')
-            .select('id, full_name, role')
-            .eq('role', 'caregiver');
-          fromProfiles = (pRows || []).map(p =>
-            normalizeSupabaseCaregiver({ id: p.id, full_name: p.full_name })
-          );
-        } else {
-          // 2. Fetch names from profiles for those user_ids
-          const userIds = cpRows.map(r => r.user_id).filter(Boolean);
-          let nameMap = {};
-          try {
-            const { data: pRows } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', userIds);
-            (pRows || []).forEach(p => { nameMap[p.id] = p.full_name || ''; });
-          } catch (_) {}
-
-          // 3. Merge: attach name to each caregiver_profiles row
-          fromProfiles = cpRows.map(cp => normalizeSupabaseCaregiver({
-            ...cp,
-            id: cp.user_id,                          // use user_id as the card id
-            full_name: nameMap[cp.user_id] || '',    // name from profiles table
+        if (rpcRows?.length) {
+          fromProfiles = rpcRows.map(r => normalizeSupabaseCaregiver({
+            ...r,
+            years_experience: r.years_exp,
           }));
+        } else {
+          // Fallback: caregiver_profiles table (older schema)
+          const { data: cpRows } = await supabase.from('caregiver_profiles').select('*');
+          if (cpRows?.length) {
+            fromProfiles = cpRows.map(cp => normalizeSupabaseCaregiver({
+              ...cp,
+              id: cp.user_id || cp.id,
+            }));
+          }
         }
       } catch (_) {}
 
       if (fromProfiles.length) {
         setSupabaseCaregivers(fromProfiles);
       }
+
+      // Load owner's existing requests and relationships to show status badges
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const [reqRes, relRes] = await Promise.all([
+          supabase.from('caregiver_requests').select('caregiver_id, status')
+            .eq('owner_id', user.id).in('status', ['pending', 'accepted']),
+          supabase.from('caregiver_relationships').select('caregiver_id')
+            .eq('profile_owner_id', user.id).neq('access_revoked', true),
+        ]);
+
+        const map = {};
+        for (const r of reqRes.data ?? []) {
+          map[r.caregiver_id] = r.status === 'accepted' ? 'connected' : 'pending';
+        }
+        for (const r of relRes.data ?? []) {
+          map[r.caregiver_id] = 'connected';
+        }
+        setStatusMap(map);
+      } catch (_) {}
     })();
   }, []);
 
@@ -276,6 +303,7 @@ export default function FindCaregiverScreen({ navigation }) {
             <SearchResultCard
               key={c.id}
               c={c}
+              connectionStatus={statusMap[c.id]}
               onPress={() => navigation.navigate('CaregiverPublicProfile', { caregiver: c })}
             />
           ))
@@ -302,6 +330,16 @@ const sh = StyleSheet.create({
     backgroundColor: C.forest,
   },
   verifiedText: { fontSize: 9, fontWeight: '700', color: '#fff', letterSpacing: 0.4 },
+  connectedTag: {
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99,
+    backgroundColor: '#DDE4D6', borderWidth: 1, borderColor: '#A8B5A0',
+  },
+  connectedTagText: { fontSize: 9, fontWeight: '700', color: '#2E4942', letterSpacing: 0.3 },
+  pendingTag: {
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99,
+    backgroundColor: '#FBE3D9', borderWidth: 1, borderColor: '#F2C9B8',
+  },
+  pendingTagText: { fontSize: 9, fontWeight: '700', color: '#C66E4E', letterSpacing: 0.3 },
 });
 
 const st = StyleSheet.create({

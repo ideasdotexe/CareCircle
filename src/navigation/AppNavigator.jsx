@@ -40,6 +40,7 @@ import ManageCaregiversScreen from '../screens/ManageCaregiversScreen';
 import InviteCaregiverScreen from '../screens/InviteCaregiverScreen';
 import FindCaregiverScreen from '../screens/FindCaregiverScreen';
 import CaregiverPublicProfileScreen from '../screens/CaregiverPublicProfileScreen';
+import MyHealthProfileScreen from '../screens/MyHealthProfileScreen';
 
 // Caregiver side
 import CaregiverTodayScreen from '../screens/CaregiverTodayScreen';
@@ -51,6 +52,8 @@ import CaregiverVisitNoteScreen from '../screens/CaregiverVisitNoteScreen';
 import CaregiverMedConfirmScreen from '../screens/CaregiverMedConfirmScreen';
 import CaregiverVitalsLogScreen from '../screens/CaregiverVitalsLogScreen';
 import CaregiverNotificationsScreen from '../screens/CaregiverNotificationsScreen';
+import CaregiverActivityScreen from '../screens/CaregiverActivityScreen';
+import CaregiverPersonInfoScreen from '../screens/CaregiverPersonInfoScreen';
 import OwnerNotificationsScreen from '../screens/OwnerNotificationsScreen';
 
 const Stack = createNativeStackNavigator();
@@ -104,6 +107,7 @@ function OwnerStack({ initialRoute }) {
       <Stack.Screen name="FindCaregiver" component={FindCaregiverScreen} />
       <Stack.Screen name="CaregiverPublicProfile" component={CaregiverPublicProfileScreen} />
       <Stack.Screen name="OwnerNotifications" component={OwnerNotificationsScreen} />
+      <Stack.Screen name="MyHealthProfile" component={MyHealthProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -120,7 +124,9 @@ function CaregiverStack({ initialRoute }) {
       <Stack.Screen name="CaregiverMedConfirm" component={CaregiverMedConfirmScreen} />
       <Stack.Screen name="CaregiverVitalsLog" component={CaregiverVitalsLogScreen} />
       <Stack.Screen name="CaregiverNotifications" component={CaregiverNotificationsScreen} />
-      {/* shared details */}
+      <Stack.Screen name="CaregiverActivity" component={CaregiverActivityScreen} />
+      <Stack.Screen name="CaregiverPublicProfile" component={CaregiverPublicProfileScreen} />
+      {/* shared details — same screens as owner, passed person param */}
       <Stack.Screen name="VitalsHistory" component={VitalsHistoryScreen} />
       <Stack.Screen name="VitalsEntry" component={VitalsEntryScreen} />
       <Stack.Screen name="Medications" component={MedicationsScreen} />
@@ -131,6 +137,10 @@ function CaregiverStack({ initialRoute }) {
       <Stack.Screen name="DocumentReview" component={DocumentReviewScreen} />
       <Stack.Screen name="LabResults" component={LabResultsScreen} />
       <Stack.Screen name="CareTeam" component={CareTeamScreen} />
+      <Stack.Screen name="ActivityFeed" component={ActivityFeedScreen} />
+      <Stack.Screen name="Conditions" component={ConditionsScreen} />
+      <Stack.Screen name="Allergies" component={AllergiesScreen} />
+      <Stack.Screen name="CaregiverPersonInfo" component={CaregiverPersonInfoScreen} />
     </Stack.Navigator>
   );
 }
@@ -153,23 +163,45 @@ function RoleRouter() {
           isOwner = Array.isArray(persons) && persons.length > 0;
         } catch (_) {}
 
-        // Check if caregiver (has caregiver relationships)
-        let isCaregiver = false;
+        // Check if caregiver with an assigned person → always open Today
+        let hasAssignedPerson = false;
+        let isCaregiverRole = metaRole === 'caregiver';
         try {
+          const userEmail = (user.email || '').toLowerCase();
+
+          // Check caregiver_relationships (primary — set by owner on assign)
           const { data: rels } = await supabase
             .from('caregiver_relationships')
-            .select('id')
+            .select('person_id')
             .eq('caregiver_id', user.id)
-            .neq('status', 'revoked')
-            .limit(1);
-          isCaregiver = Array.isArray(rels) && rels.length > 0;
+            .neq('access_revoked', true);
+
+          if (Array.isArray(rels) && rels.length > 0) {
+            isCaregiverRole = true;
+            hasAssignedPerson = rels.some(r => !!r.person_id);
+          }
+
+          // Fallback: accepted caregiver_requests
+          if (!hasAssignedPerson) {
+            const [{ data: byId }, { data: byEmail }] = await Promise.all([
+              supabase.from('caregiver_requests').select('person_id').eq('caregiver_id', user.id).eq('status', 'accepted'),
+              supabase.from('caregiver_requests').select('person_id').eq('caregiver_email', userEmail).eq('status', 'accepted'),
+            ]);
+            const accepted = [...(byId || []), ...(byEmail || [])];
+            if (accepted.length > 0) {
+              isCaregiverRole = true;
+              hasAssignedPerson = accepted.some(r => !!r.person_id);
+            }
+          }
         } catch (_) {}
 
         if (isOwner) {
           setState({ kind: 'owner', initial: 'OwnerTabs' });
-        } else if (isCaregiver) {
+        } else if (hasAssignedPerson) {
+          // Caregiver with a dear one assigned → always land on Today
           setState({ kind: 'caregiver', initial: 'CaregiverToday' });
-        } else if (metaRole === 'caregiver') {
+        } else if (isCaregiverRole) {
+          // Caregiver account but no person assigned yet → show their profile
           setState({ kind: 'caregiver', initial: 'CaregiverProfile' });
         } else {
           setState({ kind: 'owner', initial: 'Onboarding' });

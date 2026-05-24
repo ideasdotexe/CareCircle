@@ -101,23 +101,29 @@ export default function ProfileScreen({
 
   const [resolvedPerson, setResolvedPerson] = useState(routePerson ?? null);
 
-  // If we only got a personId, fetch the full person row once
   useEffect(() => {
-    if (!routePerson && routePersonId) {
-      supabase
-        .from('persons')
-        .select('*')
-        .eq('id', routePersonId)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) setResolvedPerson(data);
-        });
+    if (routePerson) {
+      setResolvedPerson(routePerson);
+      return;
     }
+    if (routePersonId) {
+      supabase
+        .from('persons').select('*').eq('id', routePersonId).maybeSingle()
+        .then(({ data }) => { if (data) setResolvedPerson(data); });
+      return;
+    }
+    // No params — fetch the current user's first person automatically
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from('persons').select('*').eq('user_id', user.id).limit(1).maybeSingle()
+        .then(({ data }) => { if (data) setResolvedPerson(data); });
+    });
   }, [routePerson, routePersonId]);
 
   const person = resolvedPerson;
   const personId = person?.id ?? routePersonId;
-  const name = person?.name ?? 'Unknown';
+  const name = person?.name ?? '';
   const relationship = person?.relationship ?? '';
   const dob = person?.date_of_birth ?? null;
   const [sections, setSections] = useState(buildSections({

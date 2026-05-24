@@ -4,6 +4,7 @@ import {
   Modal, ActivityIndicator, TextInput, Switch, Alert, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { colors, fonts } from '../theme';
@@ -201,18 +202,140 @@ function ICheck() {
     </Svg>
   );
 }
+function ICheckGreen() {
+  return (
+    <Svg width={10} height={8} viewBox="0 0 10 8" fill="none">
+      <Path d="M1 4l3 3 5-6" stroke={C.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ─── Log Dose Modal ────────────────────────────────────────
+function LogDoseModal({ med, onClose, onSave }) {
+  const [phase, setPhase] = useState('choose');
+  const [pending, setPending] = useState(null);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    await onSave(pending, note.trim());
+    setSaving(false);
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+        <View style={{ backgroundColor: C.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep, marginBottom: 2 }}>{med.name}</Text>
+          {!!med.dose && <Text style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>{med.dose}</Text>}
+
+          {phase === 'choose' ? (
+            <>
+              <TouchableOpacity
+                style={{ height: 52, borderRadius: 14, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+                onPress={() => { setPending('taken'); setPhase('note'); }}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>Mark as taken</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ height: 52, borderRadius: 14, borderWidth: 1, borderColor: C.terracotta, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => { setPending('skipped'); setPhase('note'); }}
+              >
+                <Text style={{ color: C.terracotta, fontSize: 15, fontWeight: '500' }}>Skip this dose</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: C.muted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+                {pending === 'taken' ? 'Add a note — optional' : 'Reason for skipping — optional'}
+              </Text>
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 12, marginBottom: 14 }}>
+                <TextInput
+                  style={{ fontSize: 14, color: C.ink, minHeight: 60 }}
+                  placeholder={pending === 'taken' ? 'e.g. taken with breakfast…' : 'e.g. felt nauseous…'}
+                  placeholderTextColor={C.mutedSoft}
+                  value={note} onChangeText={setNote}
+                  multiline autoFocus autoCapitalize="sentences"
+                />
+              </View>
+              <TouchableOpacity
+                style={{ height: 52, borderRadius: 14, backgroundColor: pending === 'skipped' ? C.terracotta : C.forestDeep, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+                onPress={save} disabled={saving}
+              >
+                {saving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+                      {pending === 'taken' ? 'Save — marked taken' : 'Save — dose skipped'}
+                    </Text>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPhase('choose')} style={{ alignItems: 'center', paddingTop: 4 }}>
+                <Text style={{ fontSize: 13, color: C.muted }}>← Back</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Confirm action sheet ─────────────────────────────────
+function ConfirmSheet({ visible, title, message, confirmLabel, destructive, onCancel, onConfirm, loading }) {
+  if (!visible) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onCancel} activeOpacity={1} />
+        <View style={{ backgroundColor: C.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep, marginBottom: 8 }}>{title}</Text>
+          <Text style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 20 }}>{message}</Text>
+          <TouchableOpacity
+            style={{ height: 52, borderRadius: 14, backgroundColor: destructive ? C.terracotta : C.forestDeep, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+            onPress={onConfirm}
+            disabled={loading}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>{confirmLabel}</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ height: 44, alignItems: 'center', justifyContent: 'center' }}
+            onPress={onCancel}
+            disabled={loading}
+          >
+            <Text style={{ fontSize: 15, color: C.muted }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 // ─── MedRow component ─────────────────────────────────────
-function MedRow({ med, colorIndex, scheduleTimes, isStopped, onEdit, onMarkStopped, onMarkActive, onDelete }) {
+function MedRow({ med, colorIndex, scheduleTimes, todayLogs, isStopped, onEdit, onMarkStopped, onMarkActive, onDelete, onLogDose }) {
   const bg = isStopped ? C.muted : MED_COLORS[colorIndex % MED_COLORS.length];
   const initial = med.name.trim()[0]?.toUpperCase() ?? '?';
-  const count = freqToCount(med.frequency);
   const times = scheduleTimes ?? [];
+
+  // Compute today's summary: how many taken / total slots
+  const totalSlots = times.length || 1;
+  const takenCount = (todayLogs || []).filter(l => l.status === 'taken').length;
+  const skippedCount = (todayLogs || []).filter(l => l.status === 'skipped').length;
+  const loggedCount = takenCount + skippedCount;
+  const allTaken = takenCount > 0 && takenCount >= totalSlots;
+  const someTaken = takenCount > 0 && !allTaken;
+  const allSkipped = skippedCount >= totalSlots && takenCount === 0;
 
   return (
     <View>
       <View style={s.medRow}>
-        {/* Color dot with gradient */}
+        {/* Color dot */}
         <View style={[s.medDot, { backgroundColor: bg }]}>
           <View style={s.medDotGradient} />
           <Text style={s.medDotInitial}>{initial}</Text>
@@ -225,6 +348,23 @@ function MedRow({ med, colorIndex, scheduleTimes, isStopped, onEdit, onMarkStopp
             {med.dose ? <Text style={s.medDose}>{med.dose}</Text> : null}
           </View>
           {med.frequency ? <Text style={s.medFreq}>{med.frequency}</Text> : null}
+          {/* Today's log status */}
+          {!isStopped && loggedCount > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+              {allTaken && (
+                <View style={s.logChipTaken}><ICheckGreen /><Text style={s.logChipTakenText}>Taken today</Text></View>
+              )}
+              {someTaken && (
+                <View style={s.logChipTaken}><ICheckGreen /><Text style={s.logChipTakenText}>{takenCount}/{totalSlots} taken</Text></View>
+              )}
+              {allSkipped && (
+                <View style={s.logChipSkipped}><Text style={s.logChipSkippedText}>Skipped today</Text></View>
+              )}
+              {!allTaken && !allSkipped && skippedCount > 0 && takenCount > 0 && (
+                <View style={s.logChipTaken}><Text style={s.logChipTakenText}>{takenCount} taken · {skippedCount} skipped</Text></View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Right: count + time chips */}
@@ -261,6 +401,11 @@ function MedRow({ med, colorIndex, scheduleTimes, isStopped, onEdit, onMarkStopp
         <TouchableOpacity onPress={() => onEdit(med)}>
           <Text style={[s.medAction, { color: C.forest }]}>Edit</Text>
         </TouchableOpacity>
+        {!isStopped && (
+          <TouchableOpacity onPress={() => onLogDose(med)}>
+            <Text style={[s.medAction, { color: C.forest, fontWeight: '600' }]}>Log dose</Text>
+          </TouchableOpacity>
+        )}
         {!isStopped ? (
           <TouchableOpacity onPress={() => onMarkStopped(med)}>
             <Text style={[s.medAction, { color: C.terracotta }]}>Mark stopped</Text>
@@ -278,39 +423,88 @@ function MedRow({ med, colorIndex, scheduleTimes, isStopped, onEdit, onMarkStopp
   );
 }
 
-// ─── Interaction row ──────────────────────────────────────
-function InteractionRow({ ix, isLast, onPress }) {
+// ─── Expandable interaction card ──────────────────────────
+function InteractionCard({ ix, isLast }) {
+  const [expanded, setExpanded] = useState(false);
   const sev =
     ix.sev === 'major'    ? { dot: C.terracotta, bg: '#FBE3D9', color: C.terracotta, label: 'MAJOR' } :
     ix.sev === 'moderate' ? { dot: '#C7973A',    bg: '#F5E4C9', color: '#C7973A',    label: 'MODERATE' } :
                             { dot: C.sage,       bg: C.sageSoft, color: '#2E4942',   label: 'MINOR' };
-  // For condition interactions: show condition with a soft pill background
-  const bStyle = ix.isCondition
-    ? [s.ixDrugName, { color: C.forest }]
-    : s.ixDrugName;
+
   return (
-    <TouchableOpacity
-      style={[s.listRow, !isLast && s.listRowBorder]}
-      onPress={onPress}
-      activeOpacity={0.72}
-    >
-      <View style={[s.ixDot, { backgroundColor: sev.dot }]}>
-        <IWarn />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={s.ixTitleRow}>
-          <Text style={s.ixDrugName}>{ix.a}</Text>
-          <Text style={s.ixTimes}>{ix.isCondition ? '+' : '×'}</Text>
-          <Text style={bStyle}>{ix.b}</Text>
-          <View style={[s.sevBadge, { backgroundColor: sev.bg }]}>
-            <Text style={[s.sevText, { color: sev.color }]}>{sev.label}</Text>
+    <View style={[{ overflow: 'hidden' }, !isLast && s.listRowBorder]}>
+      {/* ── Header row (always visible) ── */}
+      <TouchableOpacity
+        style={[s.listRow, expanded && { paddingBottom: 10 }]}
+        onPress={() => setExpanded(e => !e)}
+        activeOpacity={0.72}
+      >
+        <View style={[s.ixDot, { backgroundColor: sev.dot }]}>
+          <IWarn />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={s.ixTitleRow}>
+            <Text style={s.ixDrugName}>{ix.a}</Text>
+            <Text style={s.ixTimes}>{ix.isCondition ? '+' : '×'}</Text>
+            <Text style={ix.isCondition ? [s.ixDrugName, { color: C.forest }] : s.ixDrugName}>{ix.b}</Text>
+            <View style={[s.sevBadge, { backgroundColor: sev.bg }]}>
+              <Text style={[s.sevText, { color: sev.color }]}>{sev.label}</Text>
+            </View>
+          </View>
+          {!expanded && (
+            <Text style={s.ixTapHint}>
+              {ix.isCondition ? 'Drug + condition · tap to expand' : 'Tap to expand'}
+            </Text>
+          )}
+        </View>
+        {/* Chevron */}
+        <Text style={{ fontSize: 11, color: C.mutedSoft, marginLeft: 4 }}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {/* ── Expanded detail ── */}
+      {expanded && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+          {/* Severity + label badges */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+            <View style={[s.sevBadge, { backgroundColor: sev.bg, paddingHorizontal: 10, paddingVertical: 5 }]}>
+              <Text style={[s.sevText, { color: sev.color, fontSize: 11, fontWeight: '700', letterSpacing: 0.6 }]}>{sev.label}</Text>
+            </View>
+            {!!ix.label && (
+              <View style={[s.sevBadge, { backgroundColor: sev.bg, paddingHorizontal: 10, paddingVertical: 5 }]}>
+                <Text style={[s.sevText, { color: sev.color, fontSize: 11 }]}>{ix.label}</Text>
+              </View>
+            )}
+            {ix.isCondition && (
+              <View style={[s.sevBadge, { backgroundColor: C.sageSoft, paddingHorizontal: 10, paddingVertical: 5 }]}>
+                <Text style={[s.sevText, { color: C.forest, fontSize: 11 }]}>Drug + Condition</Text>
+              </View>
+            )}
+          </View>
+
+          {/* What happens */}
+          {!!ix.why && (
+            <>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: C.mutedSoft, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+                WHAT HAPPENS
+              </Text>
+              <Text style={{ fontSize: 13.5, color: C.ink, lineHeight: 20, marginBottom: 12 }}>
+                {ix.why}
+              </Text>
+            </>
+          )}
+
+          {/* Disclaimer */}
+          <View style={{ backgroundColor: C.forestDeep, borderRadius: 12, padding: 12, flexDirection: 'row', gap: 10 }}>
+            <View style={{ width: 24, height: 24, borderRadius: 7, backgroundColor: C.terracotta, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <IWarn />
+            </View>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.80)', lineHeight: 17, flex: 1 }}>
+              Always consult the prescribing physician or pharmacist before changing or stopping any medication.
+            </Text>
           </View>
         </View>
-        <Text style={s.ixTapHint}>
-          {ix.isCondition ? 'Drug + condition · tap for details →' : 'Tap for details →'}
-        </Text>
-      </View>
-    </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -328,7 +522,10 @@ export default function MedicationsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [interactions, setInteractions] = useState([]);
   const [aiChecking, setAiChecking] = useState(false);
-  const [selectedIx, setSelectedIx] = useState(null);
+  const [logDoseTarget, setLogDoseTarget] = useState(null); // med to log dose for
+  const [todayLogMap, setTodayLogMap] = useState({});       // { medName: [{status, scheduled_time}] }
+  const [confirmSheet, setConfirmSheet] = useState(null);   // { title, message, confirmLabel, destructive, onConfirm } | null
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -352,10 +549,13 @@ export default function MedicationsScreen({ navigation, route }) {
 
   const load = useCallback(async () => {
     if (!personId) { setLoading(false); return; }
-    const [medRes, schedRes, condRes] = await Promise.all([
+    const today = new Date().toISOString().split('T')[0];
+    const [medRes, schedRes, condRes, logRes] = await Promise.all([
       supabase.from('medications').select('*').eq('person_id', personId).order('created_at', { ascending: true }),
       supabase.from('medication_schedules').select('medication_name, times, frequency_type, food_instruction, supply_on_hand, id').eq('person_id', personId).eq('active', true),
       supabase.from('conditions').select('id, name').eq('person_id', personId).eq('cured', false),
+      supabase.from('activity_log').select('payload').eq('person_id', personId).eq('action_type', 'medication')
+        .gte('created_at', today + 'T00:00:00Z').lte('created_at', today + 'T23:59:59Z'),
     ]);
     const meds = medRes.data ?? [];
     const conds = condRes.data ?? [];
@@ -372,6 +572,17 @@ export default function MedicationsScreen({ navigation, route }) {
       };
     }
     setScheduleMap(map);
+
+    // Build today's log map: medName → array of {status, scheduled_time}
+    const lm = {};
+    for (const row of logRes.data ?? []) {
+      const p = row.payload || {};
+      if (p.medication_name && p.log_date === today) {
+        if (!lm[p.medication_name]) lm[p.medication_name] = [];
+        lm[p.medication_name].push({ status: p.status, scheduled_time: p.scheduled_time ?? null });
+      }
+    }
+    setTodayLogMap(lm);
 
     // Static interaction checks (instant)
     const ddIx = detectInteractions(meds);
@@ -410,7 +621,22 @@ export default function MedicationsScreen({ navigation, route }) {
     }
   }, [personId]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // ── Realtime: refresh when anyone logs a medication for this person ──
+  useEffect(() => {
+    if (!personId) return;
+    const channel = supabase
+      .channel(`owner_medlog_${personId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'activity_log',
+        filter: `person_id=eq.${personId}`,
+      }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [personId, load]);
 
   // ── Open add / edit ──
   const openAdd = () => {
@@ -561,47 +787,85 @@ export default function MedicationsScreen({ navigation, route }) {
   // ── Mark stopped / active / delete ──
   const invalidateIxCache = () => AsyncStorage.removeItem(`@cc_ix_v1_${personId}`).catch(() => {});
 
+  const runConfirmed = async (action) => {
+    setConfirmLoading(true);
+    try {
+      await action();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmSheet(null);
+    }
+  };
+
   const handleMarkStopped = (med) => {
-    Alert.alert(
-      'Mark as stopped',
-      `Mark "${med.name}" as stopped?`,
-      [{ text: 'Cancel', style: 'cancel' }, {
-        text: 'Mark stopped', onPress: async () => {
-          const { error } = await supabase.from('medications').update({ active: false }).eq('id', med.id);
-          if (error) { Alert.alert('Error', error.message); return; }
-          invalidateIxCache();
-          await load();
-        }
-      }]
-    );
+    setConfirmSheet({
+      title: 'Mark as stopped',
+      message: `Move "${med.name}" to the Stopped section? You can reactivate it any time.`,
+      confirmLabel: 'Mark stopped',
+      destructive: false,
+      onConfirm: () => runConfirmed(async () => {
+        const { error } = await supabase.from('medications').update({ active: false }).eq('id', med.id);
+        if (error) throw error;
+        invalidateIxCache();
+        await load();
+      }),
+    });
   };
+
   const handleMarkActive = (med) => {
-    Alert.alert(
-      'Mark as active',
-      `Move "${med.name}" back to current medications?`,
-      [{ text: 'Cancel', style: 'cancel' }, {
-        text: 'Mark active', onPress: async () => {
-          const { error } = await supabase.from('medications').update({ active: true }).eq('id', med.id);
-          if (error) { Alert.alert('Error', error.message); return; }
-          invalidateIxCache();
-          await load();
-        }
-      }]
-    );
+    setConfirmSheet({
+      title: 'Reactivate medication',
+      message: `Move "${med.name}" back to your current medications?`,
+      confirmLabel: 'Mark active',
+      destructive: false,
+      onConfirm: () => runConfirmed(async () => {
+        const { error } = await supabase.from('medications').update({ active: true }).eq('id', med.id);
+        if (error) throw error;
+        invalidateIxCache();
+        await load();
+      }),
+    });
   };
+
   const handleDelete = (med) => {
-    Alert.alert(
-      'Delete medication',
-      `Permanently delete "${med.name}"?`,
-      [{ text: 'Cancel', style: 'cancel' }, {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('medications').delete().eq('id', med.id);
-          if (error) { Alert.alert('Error', error.message); return; }
-          invalidateIxCache();
-          await load();
-        }
-      }]
-    );
+    setConfirmSheet({
+      title: 'Delete medication',
+      message: `Permanently delete "${med.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete permanently',
+      destructive: true,
+      onConfirm: () => runConfirmed(async () => {
+        const { error } = await supabase.from('medications').delete().eq('id', med.id);
+        if (error) throw error;
+        invalidateIxCache();
+        await load();
+      }),
+    });
+  };
+
+  const handleLogDose = async (status, note) => {
+    if (!logDoseTarget) return;
+    const med = logDoseTarget;
+    setLogDoseTarget(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('activity_log').insert({
+        actor_id: user.id,
+        actor_name: user.user_metadata?.full_name || '',
+        action_type: 'medication',
+        person_id: personId,
+        payload: {
+          medication_name: med.name,
+          scheduled_time: null,
+          log_date: new Date().toISOString().split('T')[0],
+          status,
+          note: note || null,
+        },
+      });
+      if (error) throw error;
+      await load();
+    } catch (e) {
+      Alert.alert('Could not save', e.message || String(e));
+    }
   };
 
   const activeMeds = medications.filter(m => m.active);
@@ -670,40 +934,52 @@ export default function MedicationsScreen({ navigation, route }) {
                 </View>
               )}
 
-              {/* Interaction banner */}
+              {/* Interactions — inline expandable cards */}
               {(interactions.length > 0 || aiChecking) && (
-                <TouchableOpacity
-                  style={[s.ixBanner, interactions.length === 0 && { opacity: 0.7 }]}
-                  onPress={() => interactions.length > 0 && setSelectedIx(interactions[0])}
-                  activeOpacity={0.82}
-                >
-                  <View style={s.ixBannerDot}>
-                    {aiChecking && interactions.length === 0
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <IWarn />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {interactions.length > 0 ? (
-                      <>
-                        <Text style={s.ixBannerTitle}>
-                          {interactions.length} interaction{interactions.length > 1 ? 's' : ''} detected
+                <View style={{ marginBottom: 16 }}>
+                  {/* Summary banner (non-tappable) */}
+                  <View style={[s.ixBanner, interactions.length === 0 && { opacity: 0.7 }, { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
+                    <View style={s.ixBannerDot}>
+                      {aiChecking && interactions.length === 0
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <IWarn />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      {interactions.length > 0 ? (
+                        <>
+                          <Text style={s.ixBannerTitle}>
+                            {interactions.length} interaction{interactions.length > 1 ? 's' : ''} detected
+                          </Text>
+                          <Text style={s.ixBannerSub}>
+                            {aiChecking ? 'AI analysis running…' : 'Tap any card to expand details'}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={s.ixBannerTitle}>Checking interactions…</Text>
+                      )}
+                    </View>
+                    {interactions.length > 0 && (
+                      <View style={[s.sevBadge, { backgroundColor: C.terracottaSoft }]}>
+                        <Text style={[s.sevText, { color: C.terracotta }]}>
+                          {interactions[0]?.sev === 'major' ? 'MAJOR' : interactions[0]?.sev === 'moderate' ? 'MODERATE' : 'MINOR'}
                         </Text>
-                        <Text style={s.ixBannerSub}>
-                          {aiChecking ? 'AI analysis running…' : 'Tap to review'}
-                        </Text>
-                      </>
-                    ) : (
-                      <Text style={s.ixBannerTitle}>Checking interactions…</Text>
+                      </View>
                     )}
                   </View>
+
+                  {/* Expandable interaction cards */}
                   {interactions.length > 0 && (
-                    <View style={[s.sevBadge, { backgroundColor: C.terracottaSoft }]}>
-                      <Text style={[s.sevText, { color: C.terracotta }]}>
-                        {interactions[0]?.sev === 'major' ? 'MAJOR' : interactions[0]?.sev === 'moderate' ? 'MODERATE' : 'MINOR'}
-                      </Text>
+                    <View style={[s.listCard, { borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopWidth: 0 }]}>
+                      {interactions.map((ix, i) => (
+                        <InteractionCard
+                          key={i}
+                          ix={ix}
+                          isLast={i === interactions.length - 1}
+                        />
+                      ))}
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               )}
 
               {/* Active section */}
@@ -720,11 +996,13 @@ export default function MedicationsScreen({ navigation, route }) {
                           med={med}
                           colorIndex={idx}
                           scheduleTimes={scheduleMap[med.name]?.times ?? null}
+                          todayLogs={todayLogMap[med.name] ?? []}
                           isStopped={false}
                           onEdit={openEdit}
                           onMarkStopped={handleMarkStopped}
                           onMarkActive={handleMarkActive}
                           onDelete={handleDelete}
+                          onLogDose={setLogDoseTarget}
                         />
                         {idx < activeMeds.length - 1 && <View style={s.rowDivider} />}
                       </View>
@@ -747,11 +1025,13 @@ export default function MedicationsScreen({ navigation, route }) {
                           med={med}
                           colorIndex={idx + activeMeds.length}
                           scheduleTimes={null}
+                          todayLogs={[]}
                           isStopped
                           onEdit={openEdit}
                           onMarkStopped={handleMarkStopped}
                           onMarkActive={handleMarkActive}
                           onDelete={handleDelete}
+                          onLogDose={setLogDoseTarget}
                         />
                         {idx < stoppedMeds.length - 1 && <View style={s.rowDivider} />}
                       </View>
@@ -766,55 +1046,26 @@ export default function MedicationsScreen({ navigation, route }) {
         </ScrollView>
       )}
 
-      {/* ── Interaction detail modal ── */}
-      {selectedIx && (
-        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedIx(null)}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: C.cream }}>
-            <View style={s.modalTopBar}>
-              <TouchableOpacity style={s.modalCloseBtn} onPress={() => setSelectedIx(null)}>
-                <IClose />
-              </TouchableOpacity>
-              <Text style={s.modalTopTitle}>Interaction</Text>
-              <View style={s.modalCloseBtn} />
-            </View>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-                <Text style={[s.sectionTitle, { fontSize: 22 }]}>{selectedIx.a}</Text>
-                <Text style={{ fontSize: 16, color: C.mutedSoft }}>{selectedIx.isCondition ? '+' : '×'}</Text>
-                <Text style={[s.sectionTitle, { fontSize: 22, color: selectedIx.isCondition ? C.forest : C.forestDeep }]}>{selectedIx.b}</Text>
-              </View>
-              {selectedIx.isCondition && (
-                <Text style={{ fontSize: 11, color: C.mutedSoft, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 14 }}>Drug + Condition interaction</Text>
-              )}
-              {(() => {
-                const sev = selectedIx.sev === 'major' ? { bg: '#FBE3D9', color: C.terracotta, label: 'MAJOR' }
-                  : selectedIx.sev === 'moderate' ? { bg: '#F5E4C9', color: '#C7973A', label: 'MODERATE' }
-                  : { bg: C.sageSoft, color: '#2E4942', label: 'MINOR' };
-                return (
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 22 }}>
-                    <View style={[s.sevBadge, { backgroundColor: sev.bg, paddingHorizontal: 10, paddingVertical: 5 }]}>
-                      <Text style={[s.sevText, { color: sev.color, fontSize: 11, fontWeight: '700', letterSpacing: 0.6 }]}>{sev.label}</Text>
-                    </View>
-                    <View style={[s.sevBadge, { backgroundColor: sev.bg, paddingHorizontal: 10, paddingVertical: 5 }]}>
-                      <Text style={[s.sevText, { color: sev.color, fontSize: 11 }]}>{selectedIx.label}</Text>
-                    </View>
-                  </View>
-                );
-              })()}
-              <Text style={{ fontSize: 10, fontWeight: '700', color: C.mutedSoft, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>WHAT HAPPENS</Text>
-              <Text style={{ fontSize: 14.5, color: C.ink, lineHeight: 22, marginBottom: 24 }}>{selectedIx.why}</Text>
-              <View style={{ backgroundColor: C.forestDeep, borderRadius: 14, padding: 14, flexDirection: 'row', gap: 12 }}>
-                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.terracotta, alignItems: 'center', justifyContent: 'center' }}>
-                  <IWarn />
-                </View>
-                <Text style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.80)', lineHeight: 18, flex: 1 }}>
-                  Always consult the prescribing physician or pharmacist before changing or stopping any medication.
-                </Text>
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
+      {/* ── Log dose modal ── */}
+      {logDoseTarget && (
+        <LogDoseModal
+          med={logDoseTarget}
+          onClose={() => setLogDoseTarget(null)}
+          onSave={handleLogDose}
+        />
       )}
+
+      {/* ── Confirm action sheet ── */}
+      <ConfirmSheet
+        visible={!!confirmSheet}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message ?? ''}
+        confirmLabel={confirmSheet?.confirmLabel ?? 'Confirm'}
+        destructive={confirmSheet?.destructive ?? false}
+        loading={confirmLoading}
+        onCancel={() => !confirmLoading && setConfirmSheet(null)}
+        onConfirm={confirmSheet?.onConfirm ?? (() => {})}
+      />
 
       {/* ── Add / Edit medication modal ── */}
       <Modal visible={showModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowModal(false)}>
@@ -1205,6 +1456,17 @@ const s = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3,
   },
   stoppedChipText: { fontSize: 10, color: C.terracotta, fontWeight: '600' },
+  logChipTaken: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: C.sageSoft, borderRadius: 99,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  logChipTakenText: { fontSize: 10, color: C.forest, fontWeight: '600' },
+  logChipSkipped: {
+    backgroundColor: C.terracottaSoft, borderRadius: 99,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  logChipSkippedText: { fontSize: 10, color: C.terracotta, fontWeight: '600' },
   medActions: {
     flexDirection: 'row', gap: 16,
     paddingHorizontal: 16, paddingBottom: 12,

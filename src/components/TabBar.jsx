@@ -10,7 +10,7 @@ const TABS = [
   { label: 'You', screen: 'Account', icon: IconUser },
 ];
 
-export default function TabBar({ active, navigation, params }) {
+export default function TabBar({ active, navigation }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
@@ -20,7 +20,11 @@ export default function TabBar({ active, navigation, params }) {
           return (
             <TouchableOpacity key={t.label} style={styles.item} onPress={() => {
               if (i === active) return;
-              navigation.navigate(t.screen, params);
+              // Pop everything off the stack then navigate — prevents stale params leaking
+              navigation.popToTop();
+              if (t.screen !== 'Dashboard' && t.screen !== 'OwnerTabs') {
+                navigation.navigate(t.screen);
+              }
             }} activeOpacity={0.7}>
               <Ico color={isActive ? colors.forestDeep : colors.muted} />
               <Text style={[styles.label, isActive && styles.labelActive]}>{t.label}</Text>

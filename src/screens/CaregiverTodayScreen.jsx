@@ -62,6 +62,36 @@ function INote({ color = C.forest }) {
     </Svg>
   );
 }
+function ICalendar({ color = C.forest }) {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 13 13" fill="none">
+      <Rect x={0.5} y={2} width={12} height={10} rx={1.5} stroke={color} strokeWidth={1.3} />
+      <Path d="M0.5 5.5h12M4 0.5v2M9 0.5v2" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IDoc({ color = C.forest }) {
+  return (
+    <Svg width={13} height={14} viewBox="0 0 13 14" fill="none">
+      <Path d="M1.5 1h6.5l3.5 3.5V13h-10V1z" stroke={color} strokeWidth={1.3} strokeLinejoin="round" />
+      <Path d="M4 7h5M4 10h4" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+    </Svg>
+  );
+}
+function IHeart({ color = C.forest }) {
+  return (
+    <Svg width={14} height={13} viewBox="0 0 14 13" fill="none">
+      <Path d="M7 12S1 7.5 1 4a3 3 0 016 0 3 3 0 016 0c0 3.5-6 8-6 8z" stroke={color} strokeWidth={1.3} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+function IActivity({ color = C.forest }) {
+  return (
+    <Svg width={14} height={12} viewBox="0 0 14 12" fill="none">
+      <Path d="M1 6h2.5L5 1l3 10 1.5-5H13" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 function IClock({ color = C.mutedSoft }) {
   return (
     <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
@@ -458,17 +488,41 @@ function VisitCard({ person, perms, slots, logMap, appointments, activity, onLog
         </View>
       )}
 
-      {/* CTA buttons */}
-      <View style={{ padding: 14, flexDirection: 'row', gap: 8 }}>
+      {/* Quick access grid */}
+      <View style={{ paddingHorizontal: 14, paddingTop: 14 }}>
+        <Text style={vc.gridLabel}>HEALTH RECORDS</Text>
+        <View style={vc.grid}>
+          {[
+            { label: 'Vitals',        Icon: IPulse,    screen: 'VitalsHistory',     enabled: perms.vitals?.view },
+            { label: 'Medications',   Icon: IPill,     screen: 'Medications',       enabled: perms.medications?.view },
+            { label: 'Appointments',  Icon: ICalendar, screen: 'AppointmentsScreen',enabled: perms.appointments?.view },
+            { label: 'Health Records', Icon: IDoc,      screen: 'DocsHome',          enabled: perms.reports?.view },
+            { label: 'Info',          Icon: IHeart,    screen: 'CaregiverPersonInfo', enabled: perms.profile?.view },
+            { label: 'Activity',      Icon: IActivity, screen: 'ActivityFeed',      enabled: perms.activity?.view },
+          ].map(({ label, Icon, screen, enabled }) => (
+            <TouchableOpacity
+              key={label}
+              style={[vc.tile, !enabled && { opacity: 0.38 }]}
+              onPress={() => enabled && navigation.navigate(screen, { person })}
+              activeOpacity={enabled ? 0.75 : 1}
+            >
+              <View style={vc.tileIcon}>
+                <Icon color={enabled ? C.forest : C.muted} />
+              </View>
+              <Text style={[vc.tileLabel, !enabled && { color: C.mutedSoft }]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Start visit */}
+      <View style={{ padding: 14, paddingTop: 12 }}>
         <TouchableOpacity
-          style={[vc.ctaBtn, { backgroundColor: C.forestDeep, flex: 1 }]}
+          style={vc.ctaBtn}
           onPress={onVisitPress}
           activeOpacity={0.85}
         >
-          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Start visit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={vc.dotsBtn} activeOpacity={0.8}>
-          <IDots />
+          <Text style={{ color: '#fff', fontSize: 13.5, fontWeight: '600' }}>Start visit</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -574,37 +628,77 @@ export default function CaregiverTodayScreen({ navigation }) {
         supabase.from('appointments').select('*').eq('person_id', person.id).gte('appointment_date', today).order('appointment_date').limit(5)
           .then(({ data }) => setAppointments(data || [])),
         supabase.from('activity_log').select('*').eq('person_id', person.id).order('created_at', { ascending: false }).limit(8)
-          .then(({ data }) => setActivity(data || [])),
+          .then(({ data }) => setActivity((data || []).map(row => {
+            if (row.action_type === 'medication' && row.payload) {
+              const p = row.payload;
+              return { ...row, activity_type: 'medication', title: p.medication_name || 'Medication', status: p.status || null, note: p.note || null };
+            }
+            return row;
+          }))),
       ];
 
-      // Only reload logMap when switching to a different person.
-      // Reads from activity_log — no constraint issues, already has correct RLS.
-      if (personChanged) {
-        queries.push(
-          supabase
-            .from('activity_log')
-            .select('payload')
-            .eq('person_id', person.id)
-            .eq('action_type', 'medication')
-            .gte('created_at', today + 'T00:00:00Z')
-            .lte('created_at', today + 'T23:59:59Z')
-            .then(({ data }) => {
-              const map = {};
-              for (const row of data ?? []) {
-                const p = row.payload || {};
-                if (p.log_date === today && p.medication_name) {
-                  const k = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
-                  // Keep most recent status if same med logged twice
-                  map[k] = { status: p.status, note: p.note ?? '' };
-                }
+      // Always reload logMap so updates from owners/other caregivers appear on re-focus.
+      queries.push(
+        supabase
+          .from('activity_log')
+          .select('payload')
+          .eq('person_id', person.id)
+          .eq('action_type', 'medication')
+          .gte('created_at', today + 'T00:00:00Z')
+          .lte('created_at', today + 'T23:59:59Z')
+          .then(({ data }) => {
+            const map = {};
+            for (const row of data ?? []) {
+              const p = row.payload || {};
+              if (p.log_date === today && p.medication_name) {
+                const k = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
+                // Keep most recent status if same med logged twice
+                map[k] = { status: p.status, note: p.note ?? '' };
               }
-              setLogMap(map);
-            })
-        );
-      }
+            }
+            setLogMap(map);
+          })
+      );
 
       await Promise.allSettled(queries);
     })();
+  }, [persons, activeIdx]);
+
+  // ── Realtime: refresh logMap when anyone logs a medication for this person ──
+  useEffect(() => {
+    const person = persons[activeIdx];
+    if (!person) return;
+    const today = todayStr();
+    const refreshLogMap = async () => {
+      const { data } = await supabase
+        .from('activity_log')
+        .select('payload')
+        .eq('person_id', person.id)
+        .eq('action_type', 'medication')
+        .gte('created_at', today + 'T00:00:00Z')
+        .lte('created_at', today + 'T23:59:59Z');
+      const map = {};
+      for (const row of data ?? []) {
+        const p = row.payload || {};
+        if (p.log_date === today && p.medication_name) {
+          const k = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
+          map[k] = { status: p.status, note: p.note ?? '' };
+        }
+      }
+      setLogMap(map);
+    };
+
+    const channel = supabase
+      .channel(`cg_medlog_${person.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'activity_log',
+        filter: `person_id=eq.${person.id}`,
+      }, refreshLogMap)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [persons, activeIdx]);
 
   // ── Build dose slots ───────────────────────────────────
@@ -885,8 +979,12 @@ const vc = StyleSheet.create({
   noteFrom:      { fontSize: 11.5, fontWeight: '600', color: C.forestDeep },
   noteBody:      { fontSize: 12.5, color: C.ink, lineHeight: 17, marginTop: 3 },
 
-  ctaBtn:        { height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  dotsBtn:       { width: 42, height: 42, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  gridLabel:     { fontSize: 9.5, fontWeight: '700', color: C.mutedSoft, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 },
+  grid:          { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tile:          { width: '30.5%', backgroundColor: C.cream, borderRadius: 12, borderWidth: 1, borderColor: C.lineSoft, padding: 10, alignItems: 'flex-start', gap: 6 },
+  tileIcon:      { width: 28, height: 28, borderRadius: 8, backgroundColor: C.sageSoft, alignItems: 'center', justifyContent: 'center' },
+  tileLabel:     { fontSize: 11.5, fontWeight: '600', color: C.forestDeep, letterSpacing: -0.1 },
+  ctaBtn:        { height: 46, borderRadius: 13, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center' },
 });
 
 // ─── Log modal styles ────────────────────────────────────────

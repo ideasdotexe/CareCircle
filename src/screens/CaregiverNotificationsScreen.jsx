@@ -238,18 +238,25 @@ function FeedItem({ item, isLast }) {
 // ── Notification row ──────────────────────────────────────────────────────────
 
 function NotifRow({ item, onRead, isLast }) {
+  const isCareReq = item.type === 'care_request';
+  const dotBg = item.read ? C.cream : isCareReq ? C.terracottaSoft : C.sageSoft;
   return (
     <TouchableOpacity
       style={[s.notifRow, !isLast && s.rowBorder]}
       onPress={() => onRead(item.id)}
       activeOpacity={0.75}
     >
-      <View style={[s.notifDot, { backgroundColor: item.read ? C.cream : C.sageSoft }]}>
+      <View style={[s.notifDot, { backgroundColor: dotBg }]}>
         <IBell />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.notifTitle}>{item.title}</Text>
         {!!item.body && <Text style={s.notifBody} numberOfLines={2}>{item.body}</Text>}
+        {isCareReq && (
+          <Text style={[s.notifBody, { color: C.muted, marginTop: 2 }]}>
+            Open Care requests above to respond.
+          </Text>
+        )}
       </View>
       <Text style={s.notifTime}>{timeAgo(item.created_at)}</Text>
     </TouchableOpacity>
@@ -431,20 +438,22 @@ export default function CaregiverNotificationsScreen({ navigation }) {
         .eq('status', 'pending')
         .neq('id', req.id);
 
-      if (req.person_id && caregiverId) {
+      if (caregiverId) {
         try {
+          // Find any existing relationship for this owner+caregiver pair
           const { data: existing } = await supabase
             .from('caregiver_relationships')
             .select('id')
             .eq('caregiver_id', caregiverId)
-            .eq('person_id', req.person_id)
+            .eq('profile_owner_id', req.owner_id)
             .maybeSingle();
 
           if (!existing) {
+            // Create relationship — person_id may be null (owner assigns later from Care screen)
             await supabase.from('caregiver_relationships').insert({
               caregiver_id: caregiverId,
               profile_owner_id: req.owner_id,
-              person_id: req.person_id,
+              person_id: req.person_id || null,
               role: req.role || 'caregiver',
               caregiver_name: cgName,
               caregiver_email: req.caregiver_email || '',
@@ -453,7 +462,12 @@ export default function CaregiverNotificationsScreen({ navigation }) {
             });
           } else {
             await supabase.from('caregiver_relationships')
-              .update({ access_revoked: false, permissions: req.permissions || {}, caregiver_name: cgName })
+              .update({
+                access_revoked: false,
+                permissions: req.permissions || {},
+                caregiver_name: cgName,
+                ...(req.person_id ? { person_id: req.person_id } : {}),
+              })
               .eq('id', existing.id)
               .catch(() => {});
           }
@@ -491,6 +505,8 @@ export default function CaregiverNotificationsScreen({ navigation }) {
     });
   };
 
+  // care_request notifications are handled entirely by the Care requests section above —
+  // never show them in the Notifications list to avoid spam from duplicate sends.
   const unreadNotifs = notifications.filter(n => !n.read && n.type !== 'care_request');
   const isEmpty = requests.length === 0 && activity.length === 0 && unreadNotifs.length === 0;
 

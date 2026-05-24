@@ -135,8 +135,8 @@ export default function AccountScreen({ navigation }) {
             <View style={s.card}>
               <MenuRow
                 label="My profile"
-                sub="Name, emergency contacts, preferences"
-                onPress={() => navigation.navigate('Profile')}
+                sub="Your personal health record"
+                onPress={() => navigation.navigate('MyHealthProfile')}
                 border
               />
               <MenuRow

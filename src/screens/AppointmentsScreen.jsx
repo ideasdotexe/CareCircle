@@ -1,11 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Platform,
+  ActivityIndicator, Alert, Platform, Modal, TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 
 // ─── Design tokens ────────────────────────────────────────
@@ -24,7 +25,7 @@ const C = {
   lineSoft: '#EFE8DA',
 };
 
-// ─── Type config (inferred from title keywords — no DB column needed) ────────
+// ─── Type config ──────────────────────────────────────────
 const KIND_MAP = {
   lab:       { label: 'Lab test',   color: '#B07A2A', bg: '#F5E4C9' },
   imaging:   { label: 'Imaging',    color: '#7A5A3F', bg: '#EDE4DA' },
@@ -35,7 +36,6 @@ const KIND_MAP = {
   visit:     { label: 'In-person',  color: C.forest,  bg: C.sageSoft },
   in_person: { label: 'In-person',  color: C.forest,  bg: C.sageSoft },
 };
-// Infer kind from title keywords when no kind field stored
 function inferKind(appt) {
   const text = ((appt.kind ?? appt.appointment_type ?? '')).toLowerCase();
   if (text && KIND_MAP[text]) return KIND_MAP[text];
@@ -107,24 +107,157 @@ function ICalendar() {
     </Svg>
   );
 }
+function ICheck() {
+  return (
+    <Svg width={11} height={9} viewBox="0 0 11 9" fill="none">
+      <Path d="M1 4.5l3 3 6-7" stroke={C.forest} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ─── Visit note sheet ─────────────────────────────────────
+function VisitNoteSheet({ visible, appt, onClose, onConfirm, loading }) {
+  const [doctorNotes, setDoctorNotes] = useState('');
+  const [prescriptions, setPrescriptions] = useState('');
+  const [testsOrdered, setTestsOrdered] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      // Pre-fill from existing visit notes if re-logging
+      setDoctorNotes(appt?.visit_notes ?? '');
+      setPrescriptions(appt?.prescriptions_noted ?? '');
+      setTestsOrdered(appt?.tests_ordered ?? '');
+    }
+  }, [visible, appt]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+          <View style={{ backgroundColor: C.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+            {/* Drag handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 20 }} />
+
+            <Text style={{ fontFamily: 'Georgia', fontSize: 20, color: C.forestDeep, marginBottom: 4 }}>Log this visit</Text>
+            {appt ? (
+              <Text style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{appt.title}</Text>
+            ) : null}
+
+            {/* Doctor's notes */}
+            <Text style={vs.fieldLabel}>DOCTOR'S NOTES</Text>
+            <View style={vs.inputBox}>
+              <TextInput
+                style={vs.input}
+                placeholder="What did the doctor say…"
+                placeholderTextColor={C.mutedSoft}
+                value={doctorNotes}
+                onChangeText={setDoctorNotes}
+                multiline
+                autoCapitalize="sentences"
+                scrollEnabled={false}
+              />
+            </View>
+
+            {/* Prescriptions */}
+            <Text style={vs.fieldLabel}>PRESCRIPTIONS GIVEN</Text>
+            <View style={vs.inputBox}>
+              <TextInput
+                style={vs.input}
+                placeholder="e.g. Amoxicillin 500mg for 7 days…"
+                placeholderTextColor={C.mutedSoft}
+                value={prescriptions}
+                onChangeText={setPrescriptions}
+                multiline
+                autoCapitalize="sentences"
+                scrollEnabled={false}
+              />
+            </View>
+
+            {/* Tests ordered */}
+            <Text style={vs.fieldLabel}>TESTS ORDERED</Text>
+            <View style={[vs.inputBox, { marginBottom: 22 }]}>
+              <TextInput
+                style={vs.input}
+                placeholder="e.g. CBC, blood sugar, chest X-ray…"
+                placeholderTextColor={C.mutedSoft}
+                value={testsOrdered}
+                onChangeText={setTestsOrdered}
+                multiline
+                autoCapitalize="sentences"
+                scrollEnabled={false}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={{ height: 52, borderRadius: 14, backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+              onPress={() => onConfirm({ doctorNotes: doctorNotes.trim(), prescriptions: prescriptions.trim(), testsOrdered: testsOrdered.trim() })}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>Confirm visit</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ height: 44, alignItems: 'center', justifyContent: 'center' }}
+              onPress={onClose}
+              disabled={loading}
+            >
+              <Text style={{ fontSize: 15, color: C.muted }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const vs = StyleSheet.create({
+  fieldLabel: { fontSize: 10.5, fontWeight: '700', color: C.muted, letterSpacing: 0.6, marginBottom: 7, textTransform: 'uppercase' },
+  inputBox: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 12, marginBottom: 14 },
+  input: { fontSize: 14, color: C.ink, minHeight: 44, lineHeight: 20 },
+});
 
 // ─── Appointment row ──────────────────────────────────────
-function ApptRow({ appt, isLast, onEdit, onDelete, dim }) {
+function ApptRow({ appt, isLast, onEdit, onDelete, onMarkVisited, dim }) {
   const { day, date } = formatDay(appt.appointment_date);
   const time = formatTime(appt.appointment_date);
   const until = daysUntil(appt.appointment_date);
   const t = inferKind(appt);
   const isToday = until === 0;
   const isSoon = until !== null && until >= 0 && until <= 7;
+  const isVisited = !!appt.visited_at;
+  const isPast = dim; // dim prop is set for past appointments
+
+  const hasVisitNotes = isVisited && (appt.visit_notes || appt.prescriptions_noted || appt.tests_ordered);
 
   return (
-    <View style={[s.apptRowWrap, !isLast && s.apptRowBorder, dim && { opacity: 0.65 }]}>
+    <View style={[s.apptRowWrap, !isLast && s.apptRowBorder, dim && !isVisited && { opacity: 0.65 }]}>
       {/* Main row */}
       <View style={s.apptRow}>
         {/* Date chip */}
-        <View style={[s.dateChip, isToday && { backgroundColor: C.forestDeep, borderColor: C.forestDeep }]}>
-          <Text style={[s.dateChipDay, isToday && { color: 'rgba(255,255,255,0.7)' }]}>{day}</Text>
-          <Text style={[s.dateChipDate, isToday && { color: '#fff' }]}>{date}</Text>
+        <View style={[
+          s.dateChip,
+          isToday && !isVisited && { backgroundColor: C.forestDeep, borderColor: C.forestDeep },
+          isVisited && { backgroundColor: C.sageSoft, borderColor: C.sage },
+        ]}>
+          {isVisited ? (
+            <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+              <ICheck />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: C.forest, letterSpacing: 0.3, marginTop: 2 }}>DONE</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[s.dateChipDay, isToday && { color: 'rgba(255,255,255,0.7)' }]}>{day}</Text>
+              <Text style={[s.dateChipDate, isToday && { color: '#fff' }]}>{date}</Text>
+            </>
+          )}
         </View>
 
         {/* Content */}
@@ -133,37 +266,85 @@ function ApptRow({ appt, isLast, onEdit, onDelete, dim }) {
             <View style={[s.typeChip, { backgroundColor: t.bg }]}>
               <Text style={[s.typeChipText, { color: t.color }]}>{t.label.toUpperCase()}</Text>
             </View>
-            {isSoon && !isToday && (
+            {isVisited && (
+              <View style={[s.typeChip, { backgroundColor: C.sageSoft }]}>
+                <Text style={[s.typeChipText, { color: C.forest }]}>VISITED</Text>
+              </View>
+            )}
+            {!isVisited && isSoon && !isToday && (
               <View style={[s.typeChip, { backgroundColor: C.terracottaSoft }]}>
                 <Text style={[s.typeChipText, { color: C.terracotta }]}>{daysUntilLabel(until)}</Text>
               </View>
             )}
-            {isToday && (
+            {!isVisited && isToday && (
               <View style={[s.typeChip, { backgroundColor: C.sageSoft }]}>
                 <Text style={[s.typeChipText, { color: C.forest }]}>TODAY</Text>
               </View>
             )}
           </View>
+
           <Text style={s.apptTitle} numberOfLines={1}>{appt.title || appt.type || 'Appointment'}</Text>
           {(appt.provider || appt.location || time) ? (
             <Text style={s.apptMeta} numberOfLines={1}>
               {[appt.provider, appt.location, time].filter(Boolean).join(' · ')}
             </Text>
           ) : null}
-          {appt.notes ? (
+          {appt.notes && !isVisited ? (
             <Text style={s.apptNotes} numberOfLines={1}>{appt.notes}</Text>
           ) : null}
         </View>
       </View>
+
+      {/* Visit notes preview */}
+      {hasVisitNotes && (
+        <View style={s.visitNotesCard}>
+          {appt.visit_notes ? (
+            <View style={s.visitNoteRow}>
+              <Text style={s.visitNoteLabel}>Notes</Text>
+              <Text style={s.visitNoteText} numberOfLines={2}>{appt.visit_notes}</Text>
+            </View>
+          ) : null}
+          {appt.prescriptions_noted ? (
+            <View style={[s.visitNoteRow, appt.visit_notes && s.visitNoteRowBorder]}>
+              <Text style={s.visitNoteLabel}>Rx</Text>
+              <Text style={s.visitNoteText} numberOfLines={2}>{appt.prescriptions_noted}</Text>
+            </View>
+          ) : null}
+          {appt.tests_ordered ? (
+            <View style={[s.visitNoteRow, (appt.visit_notes || appt.prescriptions_noted) && s.visitNoteRowBorder]}>
+              <Text style={s.visitNoteLabel}>Tests</Text>
+              <Text style={s.visitNoteText} numberOfLines={2}>{appt.tests_ordered}</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       {/* Action links */}
       <View style={s.apptActions}>
         <TouchableOpacity onPress={() => onEdit(appt)}>
           <Text style={[s.apptAction, { color: C.forest }]}>Edit</Text>
         </TouchableOpacity>
+
+        {/* Mark visited button — upcoming not yet visited, or past without notes */}
+        {!isVisited && (
+          <TouchableOpacity
+            style={s.visitBtn}
+            onPress={() => onMarkVisited(appt)}
+          >
+            <Text style={s.visitBtnText}>{isToday ? 'Mark visited' : isPast ? 'Add visit notes' : 'Mark visited'}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Re-log visit notes if visited */}
+        {isVisited && (
+          <TouchableOpacity onPress={() => onMarkVisited(appt)}>
+            <Text style={[s.apptAction, { color: C.muted }]}>Edit visit notes</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity onPress={() => onDelete(appt)}>
           <Text style={[s.apptAction, { color: '#C0392B' }]}>
-            {dim ? 'Delete' : 'Cancel appointment'}
+            {dim ? 'Delete' : 'Cancel'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -177,6 +358,8 @@ export default function AppointmentsScreen({ navigation, route }) {
   const [personName, setPersonName] = useState(route?.params?.personName ?? null);
   const [appts, setAppts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [visitTarget, setVisitTarget] = useState(null);
+  const [visitLoading, setVisitLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!personId) { setLoading(false); return; }
@@ -185,9 +368,7 @@ export default function AppointmentsScreen({ navigation, route }) {
         supabase.from('persons').select('name').eq('id', personId).maybeSingle(),
         supabase.from('appointments').select('*').eq('person_id', personId).order('appointment_date'),
       ]);
-      if (personRes.data && !personName) {
-        setPersonName(personRes.data.name ?? null);
-      }
+      if (personRes.data && !personName) setPersonName(personRes.data.name ?? null);
       setAppts(apptRes.data ?? []);
     } catch (_) { setAppts([]); }
     finally { setLoading(false); }
@@ -200,7 +381,6 @@ export default function AppointmentsScreen({ navigation, route }) {
   const past = appts.filter(a => a.appointment_date && new Date(a.appointment_date) < now);
   const next = upcoming[0] ?? null;
 
-  // Count helpers
   const todayCount = upcoming.filter(a => daysUntil(a.appointment_date) === 0).length;
   const weekCount = upcoming.filter(a => { const d = daysUntil(a.appointment_date); return d !== null && d <= 7; }).length;
 
@@ -223,6 +403,44 @@ export default function AppointmentsScreen({ navigation, route }) {
         },
       ]
     );
+  };
+
+  const handleConfirmVisit = async ({ doctorNotes, prescriptions, testsOrdered }) => {
+    if (!visitTarget) return;
+    setVisitLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from('appointments').update({
+        visited_at: new Date().toISOString(),
+        visit_notes: doctorNotes || null,
+        prescriptions_noted: prescriptions || null,
+        tests_ordered: testsOrdered || null,
+      }).eq('id', visitTarget.id);
+      if (error) throw error;
+
+      // Log to activity feed
+      await supabase.from('activity_log').insert({
+        actor_id: user.id,
+        actor_name: user.user_metadata?.full_name || '',
+        action_type: 'appointment',
+        person_id: personId,
+        payload: {
+          appointment_title: visitTarget.title,
+          visit_notes: doctorNotes || null,
+          prescriptions_noted: prescriptions || null,
+          tests_ordered: testsOrdered || null,
+          visited_at: new Date().toISOString(),
+        },
+      });
+
+      setVisitTarget(null);
+      await load();
+    } catch (e) {
+      Alert.alert('Error', e.message || String(e));
+    } finally {
+      setVisitLoading(false);
+    }
   };
 
   return (
@@ -251,7 +469,6 @@ export default function AppointmentsScreen({ navigation, route }) {
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
           {appts.length === 0 ? (
-            /* ── Empty state ── */
             <View style={s.emptyCard}>
               <View style={s.emptyIconWrap}>
                 <ICalendar />
@@ -279,19 +496,25 @@ export default function AppointmentsScreen({ navigation, route }) {
                   <Text style={s.heroTitle} numberOfLines={2}>{next.title || next.type || 'Appointment'}</Text>
                   <Text style={s.heroDate}>{formatFull(next.appointment_date)}</Text>
                   {(next.provider || next.location) ? (
-                    <Text style={s.heroMeta}>
-                      {[next.provider, next.location].filter(Boolean).join(' · ')}
-                    </Text>
+                    <Text style={s.heroMeta}>{[next.provider, next.location].filter(Boolean).join(' · ')}</Text>
                   ) : null}
-
-                  {/* Days-until badge */}
                   {(() => {
                     const d = daysUntil(next.appointment_date);
                     if (d === null) return null;
                     const label = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d} days away`;
                     return (
-                      <View style={s.heroBadge}>
-                        <Text style={s.heroBadgeText}>{label}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                        <View style={s.heroBadge}>
+                          <Text style={s.heroBadgeText}>{label}</Text>
+                        </View>
+                        {d <= 1 && !next.visited_at && (
+                          <TouchableOpacity
+                            style={s.heroVisitBtn}
+                            onPress={() => setVisitTarget(next)}
+                          >
+                            <Text style={s.heroVisitBtnText}>Mark visited →</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     );
                   })()}
@@ -323,9 +546,7 @@ export default function AppointmentsScreen({ navigation, route }) {
                 <View style={s.section}>
                   <View style={s.sectionHead}>
                     <Text style={s.sectionTitle}>Upcoming</Text>
-                    <Text style={s.sectionCount}>
-                      {String(upcoming.length).padStart(2, '0')}
-                    </Text>
+                    <Text style={s.sectionCount}>{String(upcoming.length).padStart(2, '0')}</Text>
                   </View>
                   <View style={s.listCard}>
                     {upcoming.map((a, i) => (
@@ -335,6 +556,7 @@ export default function AppointmentsScreen({ navigation, route }) {
                         isLast={i === upcoming.length - 1}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
+                        onMarkVisited={setVisitTarget}
                       />
                     ))}
                   </View>
@@ -345,9 +567,7 @@ export default function AppointmentsScreen({ navigation, route }) {
               {upcoming.length === 0 && (
                 <View style={s.noUpcomingCard}>
                   <Text style={s.noUpcomingText}>No upcoming appointments.</Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('AddAppointment', { personId, personName })}
-                  >
+                  <TouchableOpacity onPress={() => navigation.navigate('AddAppointment', { personId, personName })}>
                     <Text style={s.noUpcomingAction}>Schedule one →</Text>
                   </TouchableOpacity>
                 </View>
@@ -358,11 +578,9 @@ export default function AppointmentsScreen({ navigation, route }) {
                 <View style={s.section}>
                   <View style={s.sectionHead}>
                     <Text style={[s.sectionTitle, { color: C.muted }]}>Past</Text>
-                    <Text style={s.sectionCount}>
-                      {String(past.length).padStart(2, '0')}
-                    </Text>
+                    <Text style={s.sectionCount}>{String(past.length).padStart(2, '0')}</Text>
                   </View>
-                  <View style={[s.listCard, { opacity: 0.8 }]}>
+                  <View style={[s.listCard, { opacity: 0.88 }]}>
                     {past.slice(0, 20).map((a, i) => (
                       <ApptRow
                         key={a.id}
@@ -371,6 +589,7 @@ export default function AppointmentsScreen({ navigation, route }) {
                         dim
                         onEdit={handleEdit}
                         onDelete={handleDelete}
+                        onMarkVisited={setVisitTarget}
                       />
                     ))}
                   </View>
@@ -385,6 +604,15 @@ export default function AppointmentsScreen({ navigation, route }) {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+
+      {/* ── Visit note sheet ── */}
+      <VisitNoteSheet
+        visible={!!visitTarget}
+        appt={visitTarget}
+        loading={visitLoading}
+        onClose={() => !visitLoading && setVisitTarget(null)}
+        onConfirm={handleConfirmVisit}
+      />
     </SafeAreaView>
   );
 }
@@ -393,7 +621,6 @@ export default function AppointmentsScreen({ navigation, route }) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.cream },
 
-  // Top bar
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12,
@@ -417,14 +644,11 @@ const s = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 48 },
 
-  // Hero card
   heroCard: {
     backgroundColor: C.forestDeep, borderRadius: 22, padding: 20,
     marginBottom: 14, overflow: 'hidden',
   },
-  heroDecor: {
-    position: 'absolute', right: -4, bottom: -4, opacity: 0.6,
-  },
+  heroDecor: { position: 'absolute', right: -4, bottom: -4, opacity: 0.6 },
   heroEyebrow: {
     fontSize: 10, color: 'rgba(255,255,255,0.55)', letterSpacing: 1,
     fontWeight: '600', marginBottom: 6,
@@ -436,45 +660,34 @@ const s = StyleSheet.create({
   heroDate: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', lineHeight: 17 },
   heroMeta: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 3 },
   heroBadge: {
-    alignSelf: 'flex-start', marginTop: 14,
+    alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 99,
     paddingHorizontal: 12, paddingVertical: 5,
   },
   heroBadgeText: { fontSize: 11.5, color: '#fff', fontWeight: '600' },
+  heroVisitBtn: {
+    backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 99,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  heroVisitBtnText: { fontSize: 11.5, color: '#fff', fontWeight: '600' },
 
-  // Stats strip
   statsStrip: {
     flexDirection: 'row', backgroundColor: '#fff',
     borderRadius: 14, borderWidth: 1, borderColor: C.line,
     marginBottom: 16, padding: 14,
   },
   statItem: { flex: 1, alignItems: 'center' },
-  statVal: {
-    fontFamily: 'Georgia', fontSize: 22, color: C.forestDeep,
-    fontWeight: '400', letterSpacing: -0.3,
-  },
+  statVal: { fontFamily: 'Georgia', fontSize: 22, color: C.forestDeep, fontWeight: '400', letterSpacing: -0.3 },
   statLabel: { fontSize: 10, color: C.muted, marginTop: 2, fontWeight: '500', letterSpacing: 0.3 },
   statDivider: { width: 1, backgroundColor: C.lineSoft, marginVertical: 4 },
 
-  // Section
   section: { marginBottom: 16 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },
-  sectionTitle: {
-    fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep,
-    fontWeight: '500', letterSpacing: -0.3,
-  },
-  sectionCount: {
-    fontSize: 11, color: C.muted, letterSpacing: 0.4,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
+  sectionTitle: { fontFamily: 'Georgia', fontSize: 18, color: C.forestDeep, fontWeight: '500', letterSpacing: -0.3 },
+  sectionCount: { fontSize: 11, color: C.muted, letterSpacing: 0.4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
 
-  // List card
-  listCard: {
-    backgroundColor: '#fff', borderRadius: 16,
-    borderWidth: 1, borderColor: C.line, overflow: 'hidden',
-  },
+  listCard: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
 
-  // Appointment row
   apptRowWrap: {},
   apptRowBorder: { borderBottomWidth: 1, borderBottomColor: C.lineSoft },
   apptRow: {
@@ -494,40 +707,42 @@ const s = StyleSheet.create({
   apptTitle: { fontSize: 14, fontWeight: '600', color: C.ink, letterSpacing: -0.1 },
   apptMeta: { fontSize: 11.5, color: C.muted, marginTop: 3, lineHeight: 16 },
   apptNotes: { fontSize: 11, color: C.mutedSoft, marginTop: 2, fontStyle: 'italic' },
-  apptActions: {
-    flexDirection: 'row', gap: 16,
-    paddingHorizontal: 14, paddingBottom: 12,
+
+  // Visit notes preview inside row
+  visitNotesCard: {
+    marginHorizontal: 14, marginBottom: 10,
+    backgroundColor: C.sageSoft, borderRadius: 10, overflow: 'hidden',
   },
+  visitNoteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10 },
+  visitNoteRowBorder: { borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' },
+  visitNoteLabel: { fontSize: 10, fontWeight: '700', color: C.forest, letterSpacing: 0.4, width: 32, paddingTop: 1 },
+  visitNoteText: { flex: 1, fontSize: 12, color: C.ink, lineHeight: 17 },
+
+  // Action row
+  apptActions: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingBottom: 12 },
   apptAction: { fontSize: 12, fontWeight: '500' },
+  visitBtn: {
+    backgroundColor: C.forestDeep, borderRadius: 99,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  visitBtnText: { fontSize: 11.5, fontWeight: '600', color: '#fff' },
 
   // Empty state
   emptyCard: {
-    backgroundColor: '#fff', borderRadius: 18,
-    borderWidth: 1, borderColor: C.line,
+    backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: C.line,
     padding: 28, alignItems: 'center', marginTop: 20,
   },
   emptyIconWrap: {
     width: 64, height: 64, borderRadius: 18,
-    backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
+    backgroundColor: C.forestDeep, alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  emptyTitle: {
-    fontFamily: 'Georgia', fontSize: 20, color: C.forestDeep,
-    letterSpacing: -0.4, marginBottom: 8,
-  },
-  emptySub: {
-    fontSize: 13, color: C.muted, textAlign: 'center',
-    lineHeight: 19, maxWidth: 260,
-  },
-  emptyBtn: {
-    marginTop: 18, backgroundColor: C.forestDeep,
-    borderRadius: 99, paddingHorizontal: 22, paddingVertical: 11,
-  },
+  emptyTitle: { fontFamily: 'Georgia', fontSize: 20, color: C.forestDeep, letterSpacing: -0.4, marginBottom: 8 },
+  emptySub: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 19, maxWidth: 260 },
+  emptyBtn: { marginTop: 18, backgroundColor: C.forestDeep, borderRadius: 99, paddingHorizontal: 22, paddingVertical: 11 },
   emptyBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
 
   noUpcomingCard: {
-    backgroundColor: '#fff', borderRadius: 14,
-    borderWidth: 1, borderColor: C.line,
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line,
     padding: 18, alignItems: 'center', marginBottom: 16,
   },
   noUpcomingText: { fontSize: 13, color: C.muted },

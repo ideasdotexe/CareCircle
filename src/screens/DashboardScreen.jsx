@@ -472,23 +472,78 @@ export default function DashboardScreen({ navigation }) {
         const { data: a } = await supabase.from('appointments').select('*').eq('person_id', active.id).order('appointment_date');
         setAppointments(a || []);
       } catch (_) { setAppointments([]); }
-      // Activity
+      // Activity — normalize medication entries so title/status surface from payload
       try {
         const { data: act } = await supabase.from('activity_log').select('*').eq('person_id', active.id).order('created_at', { ascending: false }).limit(5);
-        setActivity(act || []);
+        setActivity((act || []).map(row => {
+          if (row.action_type === 'medication' && row.payload) {
+            const p = row.payload;
+            return { ...row, activity_type: 'medication', title: p.medication_name || 'Medication', note: p.note || row.note || null };
+          }
+          return row;
+        }));
       } catch (_) { setActivity([]); }
-      // Today's medication logs
+      // Today's medication logs — read from activity_log (single source of truth)
       try {
         const today = todayDateStr();
-        const { data: logs } = await supabase.from('medication_logs').select('*').eq('person_id', active.id).eq('log_date', today);
+        const { data: logs } = await supabase
+          .from('activity_log')
+          .select('payload, created_at')
+          .eq('person_id', active.id)
+          .eq('action_type', 'medication')
+          .gte('created_at', today + 'T00:00:00Z')
+          .lte('created_at', today + 'T23:59:59Z');
         const map = {};
-        for (const l of logs ?? []) {
-          const key = `${l.medication_name}_${l.scheduled_time ?? 'anytime'}`;
-          map[key] = { status: l.status, note: l.note ?? '', loggedAt: l.logged_at };
+        for (const row of logs ?? []) {
+          const p = row.payload || {};
+          if (p.log_date === today && p.medication_name) {
+            const key = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
+            map[key] = { status: p.status, note: p.note ?? '', loggedAt: row.created_at };
+          }
         }
         setLogMap(map);
       } catch (_) { setLogMap({}); }
     })();
+  }, [persons, activeIdx]);
+
+  // ── Realtime: refresh logMap when anyone logs a medication ──
+  useEffect(() => {
+    const active = persons[activeIdx];
+    if (!active) return;
+    const today = todayDateStr();
+
+    const refreshLogMap = async () => {
+      try {
+        const { data: logs } = await supabase
+          .from('activity_log')
+          .select('payload, created_at')
+          .eq('person_id', active.id)
+          .eq('action_type', 'medication')
+          .gte('created_at', today + 'T00:00:00Z')
+          .lte('created_at', today + 'T23:59:59Z');
+        const map = {};
+        for (const row of logs ?? []) {
+          const p = row.payload || {};
+          if (p.log_date === today && p.medication_name) {
+            const key = `${p.medication_name}_${p.scheduled_time ?? 'anytime'}`;
+            map[key] = { status: p.status, note: p.note ?? '', loggedAt: row.created_at };
+          }
+        }
+        setLogMap(map);
+      } catch (_) {}
+    };
+
+    const channel = supabase
+      .channel(`dash_medlog_${active.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'activity_log',
+        filter: `person_id=eq.${active.id}`,
+      }, refreshLogMap)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [persons, activeIdx]);
 
   // ── Build dose slots ──────────────────────────────────
@@ -547,68 +602,30 @@ export default function DashboardScreen({ navigation }) {
     setLogMap(prev => ({ ...prev, [key]: { status, note, loggedAt } }));
     setLogTarget(null);
 
-    // Supabase write
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const today = todayDateStr();
-      const hasTime = logTarget.time != null && logTarget.time !== '';
-      // Only include columns that are confirmed to exist in medication_logs
-      const payload = {
+
+      const { error } = await supabase.from('activity_log').insert({
+        actor_id: user.id,
+        actor_name: user.user_metadata?.full_name || '',
+        action_type: 'medication',
         person_id: active.id,
-        medication_name: logTarget.name,
-        scheduled_time: hasTime ? logTarget.time : null,
-        log_date: today,
-        status,
-        note: note || null,
-      };
-
-      // Find existing log — must use .is() for NULL scheduled_time (not .eq())
-      let checkQuery = supabase
-        .from('medication_logs')
-        .select('id')
-        .eq('person_id', active.id)
-        .eq('medication_name', logTarget.name)
-        .eq('log_date', today);
-      checkQuery = hasTime
-        ? checkQuery.eq('scheduled_time', logTarget.time)
-        : checkQuery.is('scheduled_time', null);
-      const { data: existing, error: checkErr } = await checkQuery.maybeSingle();
-
-      let writeError;
-      if (existing?.id) {
-        const { error } = await supabase
-          .from('medication_logs')
-          .update({ status, note: note || null })
-          .eq('id', existing.id);
-        writeError = error;
-      } else {
-        const { error } = await supabase.from('medication_logs').insert(payload);
-        writeError = error;
-      }
-
-      if (writeError) {
-        console.error('medication_logs write failed:', writeError.message);
-        // Revert optimistic update so user knows it didn't save
-        setLogMap(prev => {
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        });
-        Alert.alert('Could not save', 'The log could not be saved. Please try again.');
-        return;
-      }
-
-      // Log to activity_log (best-effort)
-      try {
-        await supabase.from('activity_log').insert({
-          person_id: active.id,
-          user_id: user?.id,
-          activity_type: 'medication',
-          title: status === 'taken' ? `${logTarget.name} taken` : `${logTarget.name} skipped`,
+        payload: {
+          medication_name: logTarget.name,
+          scheduled_time: logTarget.time || null,
+          log_date: today,
+          status,
           note: note || null,
-        });
-      } catch (_) {}
+        },
+      });
+
+      if (error) {
+        setLogMap(prev => { const n = { ...prev }; delete n[key]; return n; });
+        Alert.alert('Could not save', 'The log could not be saved. Please try again.');
+      }
     } catch (e) {
+      setLogMap(prev => { const n = { ...prev }; delete n[key]; return n; });
       console.error('handleLog error:', e);
     }
   };
